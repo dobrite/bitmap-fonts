@@ -1,6 +1,6 @@
 #![no_std]
 
-use byteorder::{ByteOrder, LittleEndian};
+use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use hashbrown::HashMap;
 
 // From https://fontforge.org/docs/techref/pcf-format.html
@@ -34,34 +34,35 @@ struct Table {
     offset: u32,
 }
 
-//#[derive(Debug)]
-//struct Metrics {
-//    left_side_bearing: bool,
-//    right_side_bearing: bool,
-//    character_width: bool,
-//    character_ascent: bool,
-//    character_descent: bool,
-//    character_attributes: bool,
-//}
-//
-//#[derive(Debug)]
-//struct Accelerators {
-//    no_overlap: bool,
-//    constant_metrics: bool,
-//    terminal_font: bool,
-//    constant_width: bool,
-//    ink_inside: bool,
-//    ink_metrics: bool,
-//    draw_direction: bool,
-//    font_ascent: bool,
-//    font_descent: bool,
-//    max_overlap: bool,
-//    minbounds: bool,
-//    maxbounds: bool,
-//    ink_minbounds: bool,
-//    ink_maxbounds: bool,
-//}
-//
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct Metrics {
+    left_side_bearing: i16,
+    right_side_bearing: i16,
+    character_width: i16,
+    character_ascent: i16,
+    character_descent: i16,
+    character_attributes: u16,
+}
+
+#[derive(Debug, Default, PartialEq)]
+struct Accelerators {
+    no_overlap: u8,
+    constant_metrics: u8,
+    terminal_font: u8,
+    constant_width: u8,
+    ink_inside: u8,
+    ink_metrics: u8,
+    draw_direction: u8,
+    padding: u8,
+    font_ascent: i32,
+    font_descent: i32,
+    max_overlap: i32,
+    minbounds: Metrics,
+    maxbounds: Metrics,
+    ink_minbounds: Metrics,
+    ink_maxbounds: Metrics,
+}
+
 //#[derive(Debug)]
 //struct Encoding {
 //    min_byte2: bool,
@@ -115,6 +116,7 @@ pub struct Pcf<'a> {
     glyph_cache: GlyphCache,
     tables: Tables,
     bytes: &'a [u8],
+    accelerators: Accelerators,
 }
 
 impl Pcf<'_> {
@@ -123,6 +125,7 @@ impl Pcf<'_> {
             bytes: font,
             glyph_cache: GlyphCache::new(),
             tables: HashMap::new(),
+            accelerators: Default::default(),
         };
 
         let mut cursor = 8;
@@ -136,6 +139,8 @@ impl Pcf<'_> {
             pcf.tables.insert(r#type, table);
             cursor += 16;
         }
+
+        pcf.accelerators = pcf.read_accelerators();
 
         pcf
     }
@@ -154,8 +159,96 @@ impl Pcf<'_> {
         &self.tables
     }
 
+    fn accelerators(&self) -> &Accelerators {
+        &self.accelerators
+    }
+
     fn bitmap_format(&self) -> u32 {
         self.tables.get(&_PCF_BITMAPS).unwrap().format
+    }
+
+    fn read_accelerators(&self) -> Accelerators {
+        let accelerators = self
+            .tables
+            .get(&_PCF_BDF_ACCELERATORS)
+            .or_else(|| self.tables.get(&_PCF_ACCELERATORS));
+
+        assert!(accelerators.is_some(), "No accelerator table found");
+
+        let table = accelerators.unwrap();
+
+        let mut cursor = table.offset as usize;
+        let format = LittleEndian::read_u32(&self.bytes[cursor..cursor + 4]);
+        cursor += 4;
+
+        assert!(format & _PCF_BYTE_MASK != 0, "Only big endian supported");
+
+        let has_inkbounds = format & _PCF_ACCEL_W_INKBOUNDS;
+
+        let no_overlap = self.bytes[cursor];
+        let constant_metrics = self.bytes[cursor + 1];
+        let terminal_font = self.bytes[cursor + 2];
+        let constant_width = self.bytes[cursor + 3];
+        let ink_inside = self.bytes[cursor + 4];
+        let ink_metrics = self.bytes[cursor + 5];
+        let draw_direction = self.bytes[cursor + 6];
+        let padding = self.bytes[cursor + 7];
+        cursor += 8;
+        let font_ascent = BigEndian::read_i32(&self.bytes[cursor..cursor + 4]);
+        cursor += 4;
+        let font_descent = BigEndian::read_i32(&self.bytes[cursor..cursor + 4]);
+        cursor += 4;
+        let max_overlap = BigEndian::read_i32(&self.bytes[cursor..cursor + 4]);
+        cursor += 4;
+
+        let minbounds = self.read_uncompressed_metrics(&mut cursor);
+        let maxbounds = self.read_uncompressed_metrics(&mut cursor);
+        let (ink_minbounds, ink_maxbounds) = if has_inkbounds != 0 {
+            (
+                self.read_uncompressed_metrics(&mut cursor),
+                self.read_uncompressed_metrics(&mut cursor),
+            )
+        } else {
+            (minbounds, maxbounds)
+        };
+
+        Accelerators {
+            no_overlap,
+            constant_metrics,
+            terminal_font,
+            constant_width,
+            ink_inside,
+            ink_metrics,
+            draw_direction,
+            padding,
+            font_ascent,
+            font_descent,
+            max_overlap,
+            minbounds,
+            maxbounds,
+            ink_minbounds,
+            ink_maxbounds,
+        }
+    }
+
+    fn read_uncompressed_metrics(&self, cursor: &mut usize) -> Metrics {
+        let left_side_bearing = BigEndian::read_i16(&self.bytes[*cursor..(*cursor + 2)]);
+        let right_side_bearing = BigEndian::read_i16(&self.bytes[(*cursor + 2)..(*cursor + 4)]);
+        let character_width = BigEndian::read_i16(&self.bytes[(*cursor + 4)..(*cursor + 6)]);
+        let character_ascent = BigEndian::read_i16(&self.bytes[(*cursor + 6)..(*cursor + 8)]);
+        let character_descent = BigEndian::read_i16(&self.bytes[(*cursor + 8)..(*cursor + 10)]);
+        let character_attributes = BigEndian::read_u16(&self.bytes[(*cursor + 10)..(*cursor + 12)]);
+
+        *cursor += 12;
+
+        Metrics {
+            left_side_bearing,
+            right_side_bearing,
+            character_width,
+            character_ascent,
+            character_descent,
+            character_attributes,
+        }
     }
 }
 
@@ -240,6 +333,59 @@ mod tests {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
         let pcf = Pcf::new(&font[..]);
         assert_eq!(tables, *pcf.tables());
+    }
+
+    #[test]
+    fn it_parses_accelerators_correctly() {
+        let accelerators = Accelerators {
+            no_overlap: 0,
+            constant_metrics: 0,
+            terminal_font: 0,
+            constant_width: 0,
+            ink_inside: 0,
+            ink_metrics: 0,
+            draw_direction: 0,
+            padding: 0,
+            font_ascent: 10,
+            font_descent: 2,
+            max_overlap: 1,
+            minbounds: Metrics {
+                left_side_bearing: -1,
+                right_side_bearing: 1,
+                character_width: 0,
+                character_ascent: -1,
+                character_descent: -7,
+                character_attributes: 0,
+            },
+            maxbounds: Metrics {
+                left_side_bearing: 3,
+                right_side_bearing: 11,
+                character_width: 11,
+                character_ascent: 9,
+                character_descent: 3,
+                character_attributes: 0,
+            },
+            ink_minbounds: Metrics {
+                left_side_bearing: -1,
+                right_side_bearing: 1,
+                character_width: 0,
+                character_ascent: -1,
+                character_descent: -7,
+                character_attributes: 0,
+            },
+            ink_maxbounds: Metrics {
+                left_side_bearing: 3,
+                right_side_bearing: 11,
+                character_width: 11,
+                character_ascent: 9,
+                character_descent: 3,
+                character_attributes: 0,
+            },
+        };
+
+        let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
+        let pcf = Pcf::new(&font[..]);
+        assert_eq!(accelerators, *pcf.accelerators());
     }
 
     #[test]
