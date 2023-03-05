@@ -61,15 +61,15 @@ struct Accelerators {
     ink_maxbounds: Metrics,
 }
 
-//#[derive(Debug)]
-//struct Encoding {
-//    min_byte2: bool,
-//    max_byte2: bool,
-//    min_byte1: bool,
-//    max_byte1: bool,
-//    default_char: bool,
-//}
-//
+#[derive(Debug, Default, PartialEq)]
+struct Encoding {
+    min_byte2: i16,
+    max_byte2: i16,
+    min_byte1: i16,
+    max_byte1: i16,
+    default_char: i16,
+}
+
 //#[derive(Debug)]
 //struct Bitmap {
 //    glyph_count: bool,
@@ -115,6 +115,7 @@ pub struct Pcf<'a> {
     tables: Tables,
     bytes: &'a [u8],
     accelerators: Accelerators,
+    encoding: Encoding,
 }
 
 impl Pcf<'_> {
@@ -124,6 +125,7 @@ impl Pcf<'_> {
             glyph_cache: GlyphCache::new(),
             tables: HashMap::new(),
             accelerators: Default::default(),
+            encoding: Default::default(),
         };
 
         let mut cursor = 8;
@@ -139,6 +141,7 @@ impl Pcf<'_> {
         }
 
         pcf.accelerators = pcf.read_accelerators();
+        pcf.encoding = pcf.read_encoding();
 
         pcf
     }
@@ -246,6 +249,39 @@ impl Pcf<'_> {
             character_ascent,
             character_descent,
             character_attributes,
+        }
+    }
+
+    #[allow(clippy::bad_bit_mask)]
+    fn read_encoding(&self) -> Encoding {
+        let encoding = self.tables.get(&_PCF_BDF_ENCODINGS);
+        let table = encoding.expect("No encoding table found");
+
+        let mut cursor = table.offset as usize;
+        let format = LittleEndian::read_u32(&self.bytes[cursor..cursor + 4]);
+        cursor += 4;
+
+        assert!(
+            format & _PCF_DEFAULT_FORMAT == 0,
+            "Encoding is not default format"
+        );
+
+        let min_byte2 = BigEndian::read_i16(&self.bytes[cursor..cursor + 2]);
+        cursor += 2;
+        let max_byte2 = BigEndian::read_i16(&self.bytes[cursor..cursor + 2]);
+        cursor += 2;
+        let min_byte1 = BigEndian::read_i16(&self.bytes[cursor..cursor + 2]);
+        cursor += 2;
+        let max_byte1 = BigEndian::read_i16(&self.bytes[cursor..cursor + 2]);
+        cursor += 2;
+        let default_char = BigEndian::read_i16(&self.bytes[cursor..cursor + 2]);
+
+        Encoding {
+            min_byte2,
+            max_byte2,
+            min_byte1,
+            max_byte1,
+            default_char,
         }
     }
 }
@@ -384,6 +420,20 @@ mod tests {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
         let pcf = Pcf::new(&font[..]);
         assert_eq!(accelerators, *pcf.accelerators());
+    }
+    #[test]
+    fn it_parses_encoding_correctly() {
+        let encoding = Encoding {
+            min_byte2: 0,
+            max_byte2: 126,
+            min_byte1: 0,
+            max_byte1: 0,
+            default_char: 1,
+        };
+
+        let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
+        let pcf = Pcf::new(&font[..]);
+        assert_eq!(encoding, pcf.encoding);
     }
 
     #[test]
