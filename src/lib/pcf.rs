@@ -160,10 +160,6 @@ impl Pcf<'_> {
         &self.tables
     }
 
-    fn accelerators(&self) -> &Accelerators {
-        &self.accelerators
-    }
-
     fn bitmap_format(&self) -> u32 {
         self.tables.get(&_PCF_BITMAPS).unwrap().format
     }
@@ -419,7 +415,7 @@ mod tests {
 
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
         let pcf = Pcf::new(&font[..]);
-        assert_eq!(accelerators, *pcf.accelerators());
+        assert_eq!(accelerators, pcf.accelerators);
     }
     #[test]
     fn it_parses_encoding_correctly() {
