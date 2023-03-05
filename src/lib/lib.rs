@@ -5,33 +5,33 @@ use hashbrown::HashMap;
 
 // From https://fontforge.org/docs/techref/pcf-format.html
 // type field
-const _PCF_PROPERTIES: i32 = 1 << 0;
-const _PCF_ACCELERATORS: i32 = 1 << 1;
-const _PCF_METRICS: i32 = 1 << 2;
-const _PCF_BITMAPS: i32 = 1 << 3;
-const _PCF_INK_METRICS: i32 = 1 << 4;
-const _PCF_BDF_ENCODINGS: i32 = 1 << 5;
-const _PCF_SWIDTHS: i32 = 1 << 6;
-const _PCF_GLYPH_NAMES: i32 = 1 << 7;
-const _PCF_BDF_ACCELERATORS: i32 = 1 << 8;
+const _PCF_PROPERTIES: u32 = 1 << 0;
+const _PCF_ACCELERATORS: u32 = 1 << 1;
+const _PCF_METRICS: u32 = 1 << 2;
+const _PCF_BITMAPS: u32 = 1 << 3;
+const _PCF_INK_METRICS: u32 = 1 << 4;
+const _PCF_BDF_ENCODINGS: u32 = 1 << 5;
+const _PCF_SWIDTHS: u32 = 1 << 6;
+const _PCF_GLYPH_NAMES: u32 = 1 << 7;
+const _PCF_BDF_ACCELERATORS: u32 = 1 << 8;
 
 // format field
-const _PCF_DEFAULT_FORMAT: i32 = 0x00000000;
-const _PCF_INKBOUNDS: i32 = 0x00000200;
-const _PCF_ACCEL_W_INKBOUNDS: i32 = 0x00000100;
-const _PCF_COMPRESSED_METRICS: i32 = 0x00000100;
+const _PCF_DEFAULT_FORMAT: u32 = 0x00000000;
+const _PCF_INKBOUNDS: u32 = 0x00000200;
+const _PCF_ACCEL_W_INKBOUNDS: u32 = 0x00000100;
+const _PCF_COMPRESSED_METRICS: u32 = 0x00000100;
 
 // format field modifiers
-const _PCF_GLYPH_PAD_MASK: i32 = 3; // See the bitmap table for explanation
-const _PCF_BYTE_MASK: i32 = 1 << 2; // If set then Most Sig Byte First
-const _PCF_BIT_MASK: i32 = 1 << 3; // If set then Most Sig Bit First
-const _PCF_SCAN_UNIT_MASK: i32 = 3 << 4; // See the bitmap table for explanation
+const _PCF_GLYPH_PAD_MASK: u32 = 3; // See the bitmap table for explanation
+const _PCF_BYTE_MASK: u32 = 1 << 2; // If set then Most Sig Byte First
+const _PCF_BIT_MASK: u32 = 1 << 3; // If set then Most Sig Bit First
+const _PCF_SCAN_UNIT_MASK: u32 = 3 << 4; // See the bitmap table for explanation
 
 #[derive(Debug)]
 struct Table {
-    format: i32,
-    size: i32,
-    offset: i32,
+    format: u32,
+    size: u32,
+    offset: u32,
 }
 
 //#[derive(Debug)]
@@ -111,7 +111,7 @@ impl GlyphCache {
 #[derive(Debug)]
 pub struct Pcf<'a> {
     glyph_cache: GlyphCache,
-    tables: HashMap<i32, Table>,
+    tables: HashMap<u32, Table>,
     bytes: &'a [u8],
 }
 
@@ -125,11 +125,11 @@ impl Pcf<'_> {
 
         let mut cursor = 8;
         for _ in 0..pcf.table_count() {
-            let r#type = LittleEndian::read_i32(&font[cursor..cursor + 4]);
+            let r#type = LittleEndian::read_u32(&font[cursor..cursor + 4]);
             let table = Table {
-                format: LittleEndian::read_i32(&font[cursor + 4..cursor + 8]),
-                size: LittleEndian::read_i32(&font[cursor + 8..cursor + 12]),
-                offset: LittleEndian::read_i32(&font[cursor + 12..cursor + 16]),
+                format: LittleEndian::read_u32(&font[cursor + 4..cursor + 8]),
+                size: LittleEndian::read_u32(&font[cursor + 8..cursor + 12]),
+                offset: LittleEndian::read_u32(&font[cursor + 12..cursor + 16]),
             };
             pcf.tables.insert(r#type, table);
             cursor += 16;
@@ -148,7 +148,7 @@ impl Pcf<'_> {
         LittleEndian::read_i32(&self.bytes[4..8])
     }
 
-    fn bitmap_format(&self) -> i32 {
+    fn bitmap_format(&self) -> u32 {
         self.tables.get(&_PCF_BITMAPS).unwrap().format
     }
 }
