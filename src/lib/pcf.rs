@@ -70,12 +70,12 @@ struct Encoding {
     default_char: i16,
 }
 
-//#[derive(Debug)]
-//struct Bitmap {
-//    glyph_count: bool,
-//    bitmap_sizes: bool,
-//}
-//
+#[derive(Debug, Default, PartialEq)]
+struct Bitmap {
+    glyph_count: i32,
+    bitmap_sizes: i32,
+}
+
 //#[derive(Debug)]
 //struct Glyph {
 //    bitmap: bool,
@@ -116,6 +116,7 @@ pub struct Pcf<'a> {
     bytes: &'a [u8],
     accelerators: Accelerators,
     encoding: Encoding,
+    bitmap: Bitmap,
 }
 
 impl Pcf<'_> {
@@ -126,6 +127,7 @@ impl Pcf<'_> {
             tables: HashMap::new(),
             accelerators: Default::default(),
             encoding: Default::default(),
+            bitmap: Default::default(),
         };
 
         let mut cursor = 8;
@@ -142,6 +144,7 @@ impl Pcf<'_> {
 
         pcf.accelerators = pcf.read_accelerators();
         pcf.encoding = pcf.read_encoding();
+        pcf.bitmap = pcf.read_bitmap();
 
         pcf
     }
@@ -278,6 +281,40 @@ impl Pcf<'_> {
             min_byte1,
             max_byte1,
             default_char,
+        }
+    }
+
+    #[allow(clippy::bad_bit_mask)]
+    fn read_bitmap(&self) -> Bitmap {
+        let bitmap = self.tables.get(&_PCF_BITMAPS);
+        let table = bitmap.expect("No bitmap table found");
+
+        let mut cursor = table.offset as usize;
+        let format = LittleEndian::read_u32(&self.bytes[cursor..cursor + 4]);
+        cursor += 4;
+
+        assert!(
+            format & _PCF_DEFAULT_FORMAT == 0,
+            "Bitmap is not default format"
+        );
+
+        let glyph_count = BigEndian::read_i32(&self.bytes[cursor..cursor + 4]);
+        cursor += 4;
+        cursor += (4 * glyph_count) as usize;
+
+        let one = BigEndian::read_i32(&self.bytes[cursor..cursor + 4]);
+        cursor += 4;
+        let two = BigEndian::read_i32(&self.bytes[cursor..cursor + 4]);
+        cursor += 4;
+        let three = BigEndian::read_i32(&self.bytes[cursor..cursor + 4]);
+        cursor += 4;
+        let four = BigEndian::read_i32(&self.bytes[cursor..cursor + 4]);
+
+        let bitmap_sizes = [one, two, three, four][(format & 3) as usize];
+
+        Bitmap {
+            glyph_count,
+            bitmap_sizes,
         }
     }
 }
@@ -417,6 +454,7 @@ mod tests {
         let pcf = Pcf::new(&font[..]);
         assert_eq!(accelerators, pcf.accelerators);
     }
+
     #[test]
     fn it_parses_encoding_correctly() {
         let encoding = Encoding {
@@ -430,6 +468,18 @@ mod tests {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
         let pcf = Pcf::new(&font[..]);
         assert_eq!(encoding, pcf.encoding);
+    }
+
+    #[test]
+    fn it_parses_bitmap_correctly() {
+        let bitmap = Bitmap {
+            glyph_count: 97,
+            bitmap_sizes: 2988,
+        };
+
+        let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
+        let pcf = Pcf::new(&font[..]);
+        assert_eq!(bitmap, pcf.bitmap);
     }
 
     #[test]
