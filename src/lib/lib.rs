@@ -27,7 +27,7 @@ const _PCF_BYTE_MASK: u32 = 1 << 2; // If set then Most Sig Byte First
 const _PCF_BIT_MASK: u32 = 1 << 3; // If set then Most Sig Bit First
 const _PCF_SCAN_UNIT_MASK: u32 = 3 << 4; // See the bitmap table for explanation
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct Table {
     format: u32,
     size: u32,
@@ -108,10 +108,12 @@ impl GlyphCache {
     }
 }
 
+type Tables = HashMap<u32, Table>;
+
 #[derive(Debug)]
 pub struct Pcf<'a> {
     glyph_cache: GlyphCache,
-    tables: HashMap<u32, Table>,
+    tables: Tables,
     bytes: &'a [u8],
 }
 
@@ -148,6 +150,10 @@ impl Pcf<'_> {
         LittleEndian::read_i32(&self.bytes[4..8])
     }
 
+    fn tables(&self) -> &Tables {
+        &self.tables
+    }
+
     fn bitmap_format(&self) -> u32 {
         self.tables.get(&_PCF_BITMAPS).unwrap().format
     }
@@ -169,6 +175,71 @@ mod tests {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
         let pcf = Pcf::new(&font[..]);
         assert_eq!(8, pcf.table_count());
+    }
+
+    #[test]
+    fn it_parses_tables() {
+        let table_1 = Table {
+            format: 14,
+            size: 1264,
+            offset: 136,
+        };
+
+        let table_2 = Table {
+            format: 14,
+            size: 100,
+            offset: 1400,
+        };
+
+        let table_4 = Table {
+            format: 270,
+            size: 492,
+            offset: 1500,
+        };
+
+        let table_8 = Table {
+            format: 14,
+            size: 3400,
+            offset: 1992,
+        };
+
+        let table_32 = Table {
+            format: 14,
+            size: 268,
+            offset: 5392,
+        };
+
+        let table_64 = Table {
+            format: 14,
+            size: 396,
+            offset: 5660,
+        };
+
+        let table_128 = Table {
+            format: 14,
+            size: 840,
+            offset: 6056,
+        };
+
+        let table_256 = Table {
+            format: 14,
+            size: 100,
+            offset: 6896,
+        };
+
+        let mut tables = HashMap::new();
+        tables.insert(1, table_1);
+        tables.insert(2, table_2);
+        tables.insert(4, table_4);
+        tables.insert(8, table_8);
+        tables.insert(32, table_32);
+        tables.insert(64, table_64);
+        tables.insert(128, table_128);
+        tables.insert(256, table_256);
+
+        let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
+        let pcf = Pcf::new(&font[..]);
+        assert_eq!(tables, *pcf.tables());
     }
 
     #[test]
