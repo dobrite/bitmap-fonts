@@ -2,7 +2,7 @@ use hashbrown::HashMap;
 
 use super::glyph::Glyph;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct GlyphCache {
     glyphs: HashMap<i32, Glyph>,
 }

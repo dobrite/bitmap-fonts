@@ -88,7 +88,7 @@ struct Bitmap {
 
 type Tables = HashMap<u32, Table>;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Pcf<'a> {
     glyph_cache: GlyphCache,
     tables: Tables,
@@ -103,26 +103,10 @@ impl Pcf<'_> {
     pub fn new(font: &[u8]) -> Pcf {
         let mut pcf = Pcf {
             bytes: font,
-            glyph_cache: GlyphCache::new(),
-            tables: HashMap::new(),
-            accelerators: Default::default(),
-            encoding: Default::default(),
-            bitmap: Default::default(),
-            bounding_box: Default::default(),
+            ..Default::default()
         };
 
-        let mut cursor = 8;
-        for _ in 0..pcf.table_count() {
-            let r#type = LittleEndian::read_u32(&font[cursor..cursor + 4]);
-            let table = Table {
-                format: LittleEndian::read_u32(&font[cursor + 4..cursor + 8]),
-                size: LittleEndian::read_u32(&font[cursor + 8..cursor + 12]),
-                offset: LittleEndian::read_u32(&font[cursor + 12..cursor + 16]),
-            };
-            pcf.tables.insert(r#type, table);
-            cursor += 16;
-        }
-
+        pcf.tables = pcf.read_tables();
         pcf.accelerators = pcf.read_accelerators();
         pcf.encoding = pcf.read_encoding();
         pcf.bitmap = pcf.read_bitmap();
@@ -147,6 +131,23 @@ impl Pcf<'_> {
 
     fn bitmap_format(&self) -> u32 {
         self.tables.get(&_PCF_BITMAPS).unwrap().format
+    }
+
+    fn read_tables(&self) -> HashMap<u32, Table> {
+        let mut tables = HashMap::new();
+        let mut cursor = 8;
+        for _ in 0..self.table_count() {
+            let r#type = LittleEndian::read_u32(&self.bytes[cursor..cursor + 4]);
+            let table = Table {
+                format: LittleEndian::read_u32(&self.bytes[cursor + 4..cursor + 8]),
+                size: LittleEndian::read_u32(&self.bytes[cursor + 8..cursor + 12]),
+                offset: LittleEndian::read_u32(&self.bytes[cursor + 12..cursor + 16]),
+            };
+            tables.insert(r#type, table);
+            cursor += 16;
+        }
+
+        tables
     }
 
     fn read_accelerators(&self) -> Accelerators {
