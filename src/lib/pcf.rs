@@ -43,6 +43,14 @@ struct Metrics {
 }
 
 #[derive(Debug, Default, PartialEq)]
+struct BoundingBox {
+    width: i16,
+    height: i16,
+    x_offset: i16,
+    y_offset: i16,
+}
+
+#[derive(Debug, Default, PartialEq)]
 struct Accelerators {
     no_overlap: u8,
     constant_metrics: u8,
@@ -117,6 +125,7 @@ pub struct Pcf<'a> {
     accelerators: Accelerators,
     encoding: Encoding,
     bitmap: Bitmap,
+    bounding_box: BoundingBox,
 }
 
 impl Pcf<'_> {
@@ -128,6 +137,7 @@ impl Pcf<'_> {
             accelerators: Default::default(),
             encoding: Default::default(),
             bitmap: Default::default(),
+            bounding_box: Default::default(),
         };
 
         let mut cursor = 8;
@@ -145,6 +155,7 @@ impl Pcf<'_> {
         pcf.accelerators = pcf.read_accelerators();
         pcf.encoding = pcf.read_encoding();
         pcf.bitmap = pcf.read_bitmap();
+        pcf.bounding_box = pcf.get_bounding_box();
 
         pcf
     }
@@ -317,6 +328,20 @@ impl Pcf<'_> {
             bitmap_sizes,
         }
     }
+
+    fn get_bounding_box(&self) -> BoundingBox {
+        let minbounds = self.accelerators.ink_minbounds;
+        let maxbounds = self.accelerators.ink_maxbounds;
+        let width = maxbounds.right_side_bearing - minbounds.left_side_bearing;
+        let height = maxbounds.character_ascent + maxbounds.character_descent;
+
+        BoundingBox {
+            width,
+            height,
+            x_offset: minbounds.left_side_bearing,
+            y_offset: -maxbounds.character_descent,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -487,5 +512,19 @@ mod tests {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
         let pcf = Pcf::new(&font[..]);
         assert_eq!(0xE, pcf.bitmap_format());
+    }
+
+    #[test]
+    fn it_has_a_bounding_box() {
+        let bounding_box = BoundingBox {
+            width: 12,
+            height: 12,
+            x_offset: -1,
+            y_offset: -3,
+        };
+
+        let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
+        let pcf = Pcf::new(&font[..]);
+        assert_eq!(bounding_box, pcf.bounding_box);
     }
 }
