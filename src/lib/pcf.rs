@@ -1,6 +1,8 @@
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use hashbrown::HashMap;
 
+use super::glyph_cache::GlyphCache;
+
 // From https://fontforge.org/docs/techref/pcf-format.html
 // type field
 const _PCF_PROPERTIES: u32 = 1 << 0;
@@ -82,37 +84,6 @@ struct Encoding {
 struct Bitmap {
     glyph_count: i32,
     bitmap_sizes: i32,
-}
-
-//#[derive(Debug)]
-//struct Glyph {
-//    bitmap: bool,
-//    width: bool,
-//    height: bool,
-//    dx: bool,
-//    dy: bool,
-//    shift_x: bool,
-//    shift_y: bool,
-//    tile_index: bool,
-//}
-
-#[derive(Debug)]
-struct GlyphCache {
-    glyphs: HashMap<i32, i32>,
-}
-
-impl GlyphCache {
-    fn new() -> Self {
-        Self {
-            glyphs: HashMap::new(),
-        }
-    }
-
-    fn load_glyphs(self, code_points: i32) {}
-
-    fn get_glyphs(self, code_point: i32) -> i32 {
-        1
-    }
 }
 
 type Tables = HashMap<u32, Table>;
