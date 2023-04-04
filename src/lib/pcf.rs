@@ -5,37 +5,37 @@ use super::glyph_cache::GlyphCache;
 
 // From https://fontforge.org/docs/techref/pcf-format.html
 // type field
-const _PCF_PROPERTIES: u32 = 1 << 0;
-const _PCF_ACCELERATORS: u32 = 1 << 1;
-const _PCF_METRICS: u32 = 1 << 2;
-const _PCF_BITMAPS: u32 = 1 << 3;
-const _PCF_INK_METRICS: u32 = 1 << 4;
-const _PCF_BDF_ENCODINGS: u32 = 1 << 5;
-const _PCF_SWIDTHS: u32 = 1 << 6;
-const _PCF_GLYPH_NAMES: u32 = 1 << 7;
-const _PCF_BDF_ACCELERATORS: u32 = 1 << 8;
+const _PCF_PROPERTIES: i32 = 1 << 0;
+const _PCF_ACCELERATORS: i32 = 1 << 1;
+const _PCF_METRICS: i32 = 1 << 2;
+const _PCF_BITMAPS: i32 = 1 << 3;
+const _PCF_INK_METRICS: i32 = 1 << 4;
+const _PCF_BDF_ENCODINGS: i32 = 1 << 5;
+const _PCF_SWIDTHS: i32 = 1 << 6;
+const _PCF_GLYPH_NAMES: i32 = 1 << 7;
+const _PCF_BDF_ACCELERATORS: i32 = 1 << 8;
 
 // format field
-const _PCF_DEFAULT_FORMAT: u32 = 0x00000000;
-const _PCF_INKBOUNDS: u32 = 0x00000200;
-const _PCF_ACCEL_W_INKBOUNDS: u32 = 0x00000100;
-const _PCF_COMPRESSED_METRICS: u32 = 0x00000100;
+const _PCF_DEFAULT_FORMAT: i32 = 0x00000000;
+const _PCF_INKBOUNDS: i32 = 0x00000200;
+const _PCF_ACCEL_W_INKBOUNDS: i32 = 0x00000100;
+const _PCF_COMPRESSED_METRICS: i32 = 0x00000100;
 
 // format field modifiers
-const _PCF_GLYPH_PAD_MASK: u32 = 3; // See the bitmap table for explanation
-const _PCF_BYTE_MASK: u32 = 1 << 2; // If set then Most Sig Byte First
-const _PCF_BIT_MASK: u32 = 1 << 3; // If set then Most Sig Bit First
-const _PCF_SCAN_UNIT_MASK: u32 = 3 << 4; // See the bitmap table for explanation
+const _PCF_GLYPH_PAD_MASK: i32 = 3; // See the bitmap table for explanation
+const _PCF_BYTE_MASK: i32 = 1 << 2; // If set then Most Sig Byte First
+const _PCF_BIT_MASK: i32 = 1 << 3; // If set then Most Sig Bit First
+const _PCF_SCAN_UNIT_MASK: i32 = 3 << 4; // See the bitmap table for explanation
 
 #[derive(Debug, PartialEq)]
 struct Table {
-    format: u32,
-    size: u32,
-    offset: u32,
+    format: i32,
+    size: i32,
+    offset: i32,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-struct Metrics {
+struct UncompressedMetrics {
     left_side_bearing: i16,
     right_side_bearing: i16,
     character_width: i16,
@@ -44,12 +44,15 @@ struct Metrics {
     character_attributes: u16,
 }
 
-#[derive(Debug, Default, PartialEq)]
-struct BoundingBox {
-    width: i16,
-    height: i16,
-    x_offset: i16,
-    y_offset: i16,
+// (currently not handled)
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct CompressedMetrics {
+    left_sided_bearing: u8,
+    right_side_bearing: u8,
+    character_width: u8,
+    character_ascent: u8,
+    character_descent: u8,
+    /* Implied character attributes field = 0 */
 }
 
 #[derive(Debug, Default, PartialEq)]
@@ -65,10 +68,10 @@ struct Accelerators {
     font_ascent: i32,
     font_descent: i32,
     max_overlap: i32,
-    minbounds: Metrics,
-    maxbounds: Metrics,
-    ink_minbounds: Metrics,
-    ink_maxbounds: Metrics,
+    minbounds: UncompressedMetrics,
+    maxbounds: UncompressedMetrics,
+    ink_minbounds: UncompressedMetrics,
+    ink_maxbounds: UncompressedMetrics,
 }
 
 #[derive(Debug, Default, PartialEq)]
@@ -86,7 +89,15 @@ struct Bitmap {
     bitmap_sizes: i32,
 }
 
-type Tables = HashMap<u32, Table>;
+#[derive(Debug, Default, PartialEq)]
+struct BoundingBox {
+    width: i16,
+    height: i16,
+    x_offset: i16,
+    y_offset: i16,
+}
+
+type Tables = HashMap<i32, Table>;
 
 #[derive(Debug, Default)]
 pub struct Pcf<'a> {
@@ -115,6 +126,7 @@ impl Pcf<'_> {
         pcf
     }
 
+    // "1fcp"
     // 1, 102, 99, 112
     // 1885562369 lsbi32
     fn header(&self) -> i32 {
@@ -129,19 +141,19 @@ impl Pcf<'_> {
         &self.tables
     }
 
-    fn bitmap_format(&self) -> u32 {
+    fn bitmap_format(&self) -> i32 {
         self.tables.get(&_PCF_BITMAPS).unwrap().format
     }
 
-    fn read_tables(&self) -> HashMap<u32, Table> {
+    fn read_tables(&self) -> HashMap<i32, Table> {
         let mut tables = HashMap::new();
         let mut cursor = 8;
         for _ in 0..self.table_count() {
-            let r#type = LittleEndian::read_u32(&self.bytes[cursor..cursor + 4]);
+            let r#type = LittleEndian::read_i32(&self.bytes[cursor..cursor + 4]);
             let table = Table {
-                format: LittleEndian::read_u32(&self.bytes[cursor + 4..cursor + 8]),
-                size: LittleEndian::read_u32(&self.bytes[cursor + 8..cursor + 12]),
-                offset: LittleEndian::read_u32(&self.bytes[cursor + 12..cursor + 16]),
+                format: LittleEndian::read_i32(&self.bytes[cursor + 4..cursor + 8]),
+                size: LittleEndian::read_i32(&self.bytes[cursor + 8..cursor + 12]),
+                offset: LittleEndian::read_i32(&self.bytes[cursor + 12..cursor + 16]),
             };
             tables.insert(r#type, table);
             cursor += 16;
@@ -161,7 +173,7 @@ impl Pcf<'_> {
         let table = accelerators.unwrap();
 
         let mut cursor = table.offset as usize;
-        let format = LittleEndian::read_u32(&self.bytes[cursor..cursor + 4]);
+        let format = LittleEndian::read_i32(&self.bytes[cursor..cursor + 4]);
         cursor += 4;
 
         assert!(format & _PCF_BYTE_MASK != 0, "Only big endian supported");
@@ -214,7 +226,7 @@ impl Pcf<'_> {
         }
     }
 
-    fn read_uncompressed_metrics(&self, cursor: &mut usize) -> Metrics {
+    fn read_uncompressed_metrics(&self, cursor: &mut usize) -> UncompressedMetrics {
         let left_side_bearing = BigEndian::read_i16(&self.bytes[*cursor..(*cursor + 2)]);
         let right_side_bearing = BigEndian::read_i16(&self.bytes[(*cursor + 2)..(*cursor + 4)]);
         let character_width = BigEndian::read_i16(&self.bytes[(*cursor + 4)..(*cursor + 6)]);
@@ -224,7 +236,7 @@ impl Pcf<'_> {
 
         *cursor += 12;
 
-        Metrics {
+        UncompressedMetrics {
             left_side_bearing,
             right_side_bearing,
             character_width,
@@ -240,7 +252,7 @@ impl Pcf<'_> {
         let table = encoding.expect("No encoding table found");
 
         let mut cursor = table.offset as usize;
-        let format = LittleEndian::read_u32(&self.bytes[cursor..cursor + 4]);
+        let format = LittleEndian::read_i32(&self.bytes[cursor..cursor + 4]);
         cursor += 4;
 
         assert!(
@@ -273,7 +285,7 @@ impl Pcf<'_> {
         let table = bitmap.expect("No bitmap table found");
 
         let mut cursor = table.offset as usize;
-        let format = LittleEndian::read_u32(&self.bytes[cursor..cursor + 4]);
+        let format = LittleEndian::read_i32(&self.bytes[cursor..cursor + 4]);
         cursor += 4;
 
         assert!(
@@ -413,7 +425,7 @@ mod tests {
             font_ascent: 10,
             font_descent: 2,
             max_overlap: 1,
-            minbounds: Metrics {
+            minbounds: UncompressedMetrics {
                 left_side_bearing: -1,
                 right_side_bearing: 1,
                 character_width: 0,
@@ -421,7 +433,7 @@ mod tests {
                 character_descent: -7,
                 character_attributes: 0,
             },
-            maxbounds: Metrics {
+            maxbounds: UncompressedMetrics {
                 left_side_bearing: 3,
                 right_side_bearing: 11,
                 character_width: 11,
@@ -429,7 +441,7 @@ mod tests {
                 character_descent: 3,
                 character_attributes: 0,
             },
-            ink_minbounds: Metrics {
+            ink_minbounds: UncompressedMetrics {
                 left_side_bearing: -1,
                 right_side_bearing: 1,
                 character_width: 0,
@@ -437,7 +449,7 @@ mod tests {
                 character_descent: -7,
                 character_attributes: 0,
             },
-            ink_maxbounds: Metrics {
+            ink_maxbounds: UncompressedMetrics {
                 left_side_bearing: 3,
                 right_side_bearing: 11,
                 character_width: 11,
