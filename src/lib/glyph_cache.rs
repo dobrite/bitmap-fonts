@@ -4,7 +4,7 @@ use super::glyph::Glyph;
 
 #[derive(Debug, Default)]
 pub struct GlyphCache {
-    glyphs: HashMap<i32, Glyph>,
+    pub glyphs: HashMap<i32, Glyph>,
 }
 
 impl GlyphCache {
@@ -12,6 +12,10 @@ impl GlyphCache {
         Self {
             glyphs: HashMap::new(),
         }
+    }
+
+    pub fn contains(&self, code_point: &i32) -> bool {
+        self.glyphs.contains_key(code_point)
     }
 
     fn load_glyphs(self, _code_points: i32) {}
