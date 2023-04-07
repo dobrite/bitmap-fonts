@@ -100,7 +100,7 @@ struct BoundingBox {
 type Tables = HashMap<i32, Table>;
 
 #[derive(Debug, Default)]
-pub struct Pcf<'a> {
+pub struct PcfFont<'a> {
     glyph_cache: GlyphCache,
     tables: Tables,
     bytes: &'a [u8],
@@ -122,9 +122,9 @@ pub struct Metadata {
     metrics_size: i32,
 }
 
-impl Pcf<'_> {
-    pub fn new(font: &[u8]) -> Pcf {
-        let mut pcf = Pcf {
+impl PcfFont<'_> {
+    pub fn new(font: &[u8]) -> PcfFont {
+        let mut pcf = PcfFont {
             bytes: font,
             ..Default::default()
         };
@@ -549,14 +549,14 @@ mod tests {
     #[test]
     fn it_parses_header() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
-        let pcf = Pcf::new(&font[..]);
+        let pcf = PcfFont::new(&font[..]);
         assert_eq!(1885562369, pcf.header());
     }
 
     #[test]
     fn it_parses_table_count() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
-        let pcf = Pcf::new(&font[..]);
+        let pcf = PcfFont::new(&font[..]);
         assert_eq!(8, pcf.table_count());
     }
 
@@ -621,7 +621,7 @@ mod tests {
         tables.insert(256, table_256);
 
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
-        let pcf = Pcf::new(&font[..]);
+        let pcf = PcfFont::new(&font[..]);
         assert_eq!(tables, *pcf.tables());
     }
 
@@ -674,7 +674,7 @@ mod tests {
         };
 
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
-        let pcf = Pcf::new(&font[..]);
+        let pcf = PcfFont::new(&font[..]);
         assert_eq!(accelerators, pcf.accelerators);
     }
 
@@ -689,7 +689,7 @@ mod tests {
         };
 
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
-        let pcf = Pcf::new(&font[..]);
+        let pcf = PcfFont::new(&font[..]);
         assert_eq!(encoding, pcf.encoding);
     }
 
@@ -701,14 +701,14 @@ mod tests {
         };
 
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
-        let pcf = Pcf::new(&font[..]);
+        let pcf = PcfFont::new(&font[..]);
         assert_eq!(bitmap, pcf.bitmap);
     }
 
     #[test]
     fn it_parses_bitmap_format() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
-        let pcf = Pcf::new(&font[..]);
+        let pcf = PcfFont::new(&font[..]);
         assert_eq!(0xE, pcf.bitmap_format());
     }
 
@@ -722,7 +722,7 @@ mod tests {
         };
 
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
-        let pcf = Pcf::new(&font[..]);
+        let pcf = PcfFont::new(&font[..]);
         assert_eq!(bounding_box, pcf.bounding_box);
     }
 
@@ -739,7 +739,7 @@ mod tests {
         };
 
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
-        let pcf = Pcf::new(&font[..]);
+        let pcf = PcfFont::new(&font[..]);
 
         assert_eq!(metadata, pcf.metadata);
     }
@@ -747,7 +747,7 @@ mod tests {
     #[test]
     fn it_loads_indices() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
-        let pcf = Pcf::new(&font[..]);
+        let pcf = PcfFont::new(&font[..]);
         let indices = vec![Some(35)];
         assert_eq!(indices, pcf.load_indices(&[&65]));
     }
@@ -755,7 +755,7 @@ mod tests {
     #[test]
     fn it_loads_all_metrics() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
-        let pcf = Pcf::new(&font[..]);
+        let pcf = PcfFont::new(&font[..]);
         let indices = pcf.load_indices(&[&65]);
         let compressed_metrics = CompressedMetrics {
             left_side_bearing: 0,
@@ -775,7 +775,7 @@ mod tests {
     #[test]
     fn it_loads_bitmap_offsets() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
-        let pcf = Pcf::new(&font[..]);
+        let pcf = PcfFont::new(&font[..]);
         let indices = pcf.load_indices(&[&65]);
 
         assert_eq!(vec![Some(960)], pcf.load_bitmap_offsets(&[&65], &indices));
@@ -792,7 +792,7 @@ mod tests {
     #[test]
     fn it_has_an_uppercase_a() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
-        let mut pcf = Pcf::new(&font[..]);
+        let mut pcf = PcfFont::new(&font[..]);
         pcf.load_glyphs(&[65]);
         #[rustfmt::skip]
         let expected = Glyph {
