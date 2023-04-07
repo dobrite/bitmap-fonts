@@ -4,9 +4,5 @@ version = "0.1.0"
 authors = ["Dave O <davidobrite@gmail.com>"]
 edition = "2021"
 
-[lib]
-name = "bitmap_font"
-path = "src/lib/lib.rs"
-
 [dependencies]
 byteorder = { version = "1.4.3", default-features = false }
