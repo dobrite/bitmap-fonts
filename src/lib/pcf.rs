@@ -1,5 +1,5 @@
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
-use hashbrown::HashMap;
+use std::collections::HashMap;
 
 use super::glyph_cache::GlyphCache;
 
