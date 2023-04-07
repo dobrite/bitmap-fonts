@@ -5,27 +5,27 @@ use super::glyph::Glyph;
 
 // From https://fontforge.org/docs/techref/pcf-format.html
 // type field
-const _PCF_PROPERTIES: i32 = 1 << 0;
-const _PCF_ACCELERATORS: i32 = 1 << 1;
-const _PCF_METRICS: i32 = 1 << 2;
-const _PCF_BITMAPS: i32 = 1 << 3;
-const _PCF_INK_METRICS: i32 = 1 << 4;
-const _PCF_BDF_ENCODINGS: i32 = 1 << 5;
-const _PCF_SWIDTHS: i32 = 1 << 6;
-const _PCF_GLYPH_NAMES: i32 = 1 << 7;
-const _PCF_BDF_ACCELERATORS: i32 = 1 << 8;
+const PCF_PROPERTIES: i32 = 1 << 0;
+const PCF_ACCELERATORS: i32 = 1 << 1;
+const PCF_METRICS: i32 = 1 << 2;
+const PCF_BITMAPS: i32 = 1 << 3;
+const PCF_INK_METRICS: i32 = 1 << 4;
+const PCF_BDF_ENCODINGS: i32 = 1 << 5;
+const PCF_SWIDTHS: i32 = 1 << 6;
+const PCF_GLYPH_NAMES: i32 = 1 << 7;
+const PCF_BDF_ACCELERATORS: i32 = 1 << 8;
 
 // format field
-const _PCF_DEFAULT_FORMAT: i32 = 0x00000000;
-const _PCF_INKBOUNDS: i32 = 0x00000200;
-const _PCF_ACCEL_W_INKBOUNDS: i32 = 0x00000100;
-const _PCF_COMPRESSED_METRICS: i32 = 0x00000100;
+const PCF_DEFAULT_FORMAT: i32 = 0x00000000;
+const PCF_INKBOUNDS: i32 = 0x00000200;
+const PCF_ACCEL_W_INKBOUNDS: i32 = 0x00000100;
+const PCF_COMPRESSED_METRICS: i32 = 0x00000100;
 
 // format field modifiers
-const _PCF_GLYPH_PAD_MASK: i32 = 3; // See the bitmap table for explanation
-const _PCF_BYTE_MASK: i32 = 1 << 2; // If set then Most Sig Byte First
-const _PCF_BIT_MASK: i32 = 1 << 3; // If set then Most Sig Bit First
-const _PCF_SCAN_UNIT_MASK: i32 = 3 << 4; // See the bitmap table for explanation
+const PCF_GLYPH_PAD_MASK: i32 = 3; // See the bitmap table for explanation
+const PCF_BYTE_MASK: i32 = 1 << 2; // If set then Most Sig Byte First
+const PCF_BIT_MASK: i32 = 1 << 3; // If set then Most Sig Bit First
+const PCF_SCAN_UNIT_MASK: i32 = 3 << 4; // See the bitmap table for explanation
 
 #[derive(Debug, PartialEq)]
 struct Table {
@@ -154,7 +154,7 @@ impl PcfFont<'_> {
     }
 
     fn bitmap_format(&self) -> i32 {
-        self.tables.get(&_PCF_BITMAPS).unwrap().format
+        self.tables.get(&PCF_BITMAPS).unwrap().format
     }
 
     fn read_tables(&self) -> HashMap<i32, Table> {
@@ -177,8 +177,8 @@ impl PcfFont<'_> {
     fn read_accelerators(&self) -> Accelerators {
         let accelerators = self
             .tables
-            .get(&_PCF_BDF_ACCELERATORS)
-            .or_else(|| self.tables.get(&_PCF_ACCELERATORS));
+            .get(&PCF_BDF_ACCELERATORS)
+            .or_else(|| self.tables.get(&PCF_ACCELERATORS));
 
         assert!(accelerators.is_some(), "No accelerator table found");
 
@@ -188,9 +188,9 @@ impl PcfFont<'_> {
         let format = LittleEndian::read_i32(&self.bytes[cursor..cursor + 4]);
         cursor += 4;
 
-        assert!(format & _PCF_BYTE_MASK != 0, "Only big endian supported");
+        assert!(format & PCF_BYTE_MASK != 0, "Only big endian supported");
 
-        let has_inkbounds = format & _PCF_ACCEL_W_INKBOUNDS;
+        let has_inkbounds = format & PCF_ACCEL_W_INKBOUNDS;
 
         let no_overlap = self.bytes[cursor];
         let constant_metrics = self.bytes[cursor + 1];
@@ -277,7 +277,7 @@ impl PcfFont<'_> {
 
     #[allow(clippy::bad_bit_mask)]
     fn read_encoding(&self) -> Encoding {
-        let encoding = self.tables.get(&_PCF_BDF_ENCODINGS);
+        let encoding = self.tables.get(&PCF_BDF_ENCODINGS);
         let table = encoding.expect("No encoding table found");
 
         let mut cursor = table.offset as usize;
@@ -285,7 +285,7 @@ impl PcfFont<'_> {
         cursor += 4;
 
         assert!(
-            format & _PCF_DEFAULT_FORMAT == 0,
+            format & PCF_DEFAULT_FORMAT == 0,
             "Encoding is not default format"
         );
 
@@ -310,7 +310,7 @@ impl PcfFont<'_> {
 
     #[allow(clippy::bad_bit_mask)]
     fn read_bitmap(&self) -> Bitmap {
-        let bitmap = self.tables.get(&_PCF_BITMAPS);
+        let bitmap = self.tables.get(&PCF_BITMAPS);
         let table = bitmap.expect("No bitmap table found");
 
         let mut cursor = table.offset as usize;
@@ -318,7 +318,7 @@ impl PcfFont<'_> {
         cursor += 4;
 
         assert!(
-            format & _PCF_DEFAULT_FORMAT == 0,
+            format & PCF_DEFAULT_FORMAT == 0,
             "Bitmap is not default format"
         );
 
@@ -357,14 +357,14 @@ impl PcfFont<'_> {
     }
 
     fn load_metadata(&self) -> Metadata {
-        let indices_offset = self.tables[&_PCF_BDF_ENCODINGS].offset + 14;
-        let bitmap_offset_offsets = self.tables[&_PCF_BITMAPS].offset + 8;
+        let indices_offset = self.tables[&PCF_BDF_ENCODINGS].offset + 14;
+        let bitmap_offset_offsets = self.tables[&PCF_BITMAPS].offset + 8;
         let first_bitmap_offset =
-            self.tables[&_PCF_BITMAPS].offset + 4 * (6 + self.bitmap.glyph_count);
-        let metrics_compressed_raw = self.tables[&_PCF_METRICS].format & _PCF_COMPRESSED_METRICS;
+            self.tables[&PCF_BITMAPS].offset + 4 * (6 + self.bitmap.glyph_count);
+        let metrics_compressed_raw = self.tables[&PCF_METRICS].format & PCF_COMPRESSED_METRICS;
         let is_metrics_compressed = metrics_compressed_raw != 0;
         let first_metric_offset =
-            self.tables[&_PCF_METRICS].offset + (if is_metrics_compressed { 6 } else { 8 });
+            self.tables[&PCF_METRICS].offset + (if is_metrics_compressed { 6 } else { 8 });
         let metrics_size = if is_metrics_compressed { 5 } else { 12 };
 
         Metadata {
