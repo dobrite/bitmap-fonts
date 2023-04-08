@@ -90,10 +90,20 @@ struct Bitmap {
 
 #[derive(Debug, Default, PartialEq)]
 pub struct BoundingBox {
-    width: i16,
-    height: i16,
-    x_offset: i16,
-    y_offset: i16,
+    pub size: Coord,
+    pub offset: Coord,
+}
+
+#[derive(Debug, Default, PartialEq)]
+pub struct Coord {
+    pub x: i32,
+    pub y: i32,
+}
+
+impl Coord {
+    pub fn new(x: i32, y: i32) -> Self {
+        Self { x, y }
+    }
 }
 
 type Tables = HashMap<i32, Table>;
@@ -349,10 +359,11 @@ impl PcfFont<'_> {
         let height = maxbounds.character_ascent + maxbounds.character_descent;
 
         BoundingBox {
-            width,
-            height,
-            x_offset: minbounds.left_side_bearing,
-            y_offset: -maxbounds.character_descent,
+            size: Coord::new(width.into(), height.into()),
+            offset: Coord::new(
+                minbounds.left_side_bearing.into(),
+                (-maxbounds.character_descent).into(),
+            ),
         }
     }
 
@@ -722,10 +733,8 @@ mod tests {
     #[test]
     fn it_has_a_bounding_box() {
         let bounding_box = BoundingBox {
-            width: 12,
-            height: 12,
-            x_offset: -1,
-            y_offset: -3,
+            size: Coord::new(12, 12),
+            offset: Coord::new(-1, -3),
         };
 
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
