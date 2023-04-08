@@ -111,7 +111,7 @@ pub struct PcfFont<'a> {
 }
 
 #[derive(Debug, Default, PartialEq)]
-pub struct Metadata {
+struct Metadata {
     indices_offset: i32,
     bitmap_offset_offsets: i32,
     first_bitmap_offset: i32,
