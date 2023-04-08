@@ -110,7 +110,7 @@ type Tables = HashMap<i32, Table>;
 
 #[derive(Debug, Default)]
 pub struct PcfFont<'a> {
-    glyph_cache: HashMap<i32, Glyph>,
+    glyphs: HashMap<i32, Glyph>,
     tables: Tables,
     bytes: &'a [u8],
     accelerators: Accelerators,
@@ -472,7 +472,7 @@ impl PcfFont<'_> {
 
         let code_points = code_points
             .iter()
-            .filter(|cp| !self.glyph_cache.contains_key(cp))
+            .filter(|cp| !self.glyphs.contains_key(cp))
             .collect::<Vec<_>>();
 
         if code_points.is_empty() {
@@ -519,7 +519,7 @@ impl PcfFont<'_> {
                     tile_index: 0,
                 };
 
-                self.glyph_cache.insert(*code_points[i], glyph);
+                self.glyphs.insert(*code_points[i], glyph);
             }
         }
 
@@ -539,7 +539,7 @@ impl PcfFont<'_> {
                 let words_per_row = (width + 31) / 32;
                 let bytes_per_row = 4 * words_per_row;
                 let code_point = index_to_code_point[i].as_mut().expect("no bitmap found");
-                let glyph = self.glyph_cache.get_mut(code_point).unwrap();
+                let glyph = self.glyphs.get_mut(code_point).unwrap();
                 for y in 0..height {
                     for x in 0..width {
                         let idx = offset + (bytes_per_row * y);
@@ -833,7 +833,7 @@ mod tests {
             shift_y: 0,
             tile_index: 0,
         };
-        let glyph = pcf.glyph_cache.get(&65).unwrap();
+        let glyph = pcf.glyphs.get(&65).unwrap();
         assert_eq!(expected, *glyph);
     }
 }
