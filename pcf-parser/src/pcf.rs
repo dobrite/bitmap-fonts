@@ -110,7 +110,7 @@ type Tables = HashMap<i32, Table>;
 
 #[derive(Debug, Default)]
 pub struct PcfFont<'a> {
-    glyphs: HashMap<i32, Glyph>,
+    pub glyphs: HashMap<i32, Glyph>,
     tables: Tables,
     bytes: &'a [u8],
     accelerators: Accelerators,
