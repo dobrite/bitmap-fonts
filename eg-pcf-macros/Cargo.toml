@@ -9,3 +9,7 @@ proc-macro = true
 
 [dependencies]
 pcf-parser = { version= "0.1.0", path = "../pcf-parser" }
+syn = "2.0"
+quote = "1.0"
+proc-macro2 = "1.0"
+embedded-graphics = "0.7.1"
