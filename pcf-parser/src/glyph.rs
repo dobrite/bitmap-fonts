@@ -11,3 +11,9 @@ pub struct Glyph {
     pub shift_y: i32,
     pub tile_index: i32,
 }
+
+impl Glyph {
+    pub fn pixel(&self, x: usize, y: usize) -> bool {
+        self.bitmap[y * self.width + x] != 0
+    }
+}
