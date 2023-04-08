@@ -89,7 +89,7 @@ struct Bitmap {
 }
 
 #[derive(Debug, Default, PartialEq)]
-struct BoundingBox {
+pub struct BoundingBox {
     width: i16,
     height: i16,
     x_offset: i16,
