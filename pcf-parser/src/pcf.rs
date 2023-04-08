@@ -499,10 +499,7 @@ impl PcfFont<'_> {
                     .expect("height conversion failed");
                 let bitmap = vec![0u8; width * height];
                 let code_point = *code_points[i];
-                let encoding = u32::try_from(code_point)
-                    .ok()
-                    .and_then(std::char::from_u32)
-                    .expect("char from_u32 failed");
+                let encoding = u32::try_from(code_point).ok().and_then(std::char::from_u32);
 
                 index_to_code_point[i] = Some(code_point);
 
@@ -813,7 +810,7 @@ mod tests {
         #[rustfmt::skip]
         let expected = Glyph {
             code_point: 65,
-            encoding: 'A',
+            encoding: Some('A'),
             bitmap: vec![
                 0, 0, 0, 1, 0, 0, 0,
                 0, 0, 0, 1, 1, 0, 0,
