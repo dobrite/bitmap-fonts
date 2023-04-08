@@ -116,7 +116,7 @@ pub struct PcfFont<'a> {
     accelerators: Accelerators,
     encoding: Encoding,
     bitmap: Bitmap,
-    bounding_box: BoundingBox,
+    pub bounding_box: BoundingBox,
     metadata: Metadata,
 }
 
