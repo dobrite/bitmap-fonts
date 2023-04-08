@@ -1,0 +1,12 @@
+[package]
+name = "eg-pcf"
+version = "0.1.0"
+authors = ["Dave O <davidobrite@gmail.com>"]
+edition = "2021"
+
+[dependencies]
+embedded-graphics = "0.7.1"
+eg-pcf-macros = { version = "0.1.0", path = "../eg-pcf-macros" }
+
+[dev-dependencies]
+embedded-graphics-simulator = "0.4.1"

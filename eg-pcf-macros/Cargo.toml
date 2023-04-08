@@ -1,0 +1,11 @@
+[package]
+name = "eg-pcf-macros"
+version = "0.1.0"
+authors = ["Dave O <davidobrite@gmail.com>"]
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+pcf-parser = { version= "0.1.0", path = "../pcf-parser" }
