@@ -1,5 +1,7 @@
 #[derive(Debug, PartialEq)]
 pub struct Glyph {
+    pub code_point: i32,
+    pub encoding: char,
     pub bitmap: Vec<u8>,
     pub width: usize,
     pub height: usize,
