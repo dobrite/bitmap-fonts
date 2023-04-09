@@ -145,6 +145,9 @@ impl PcfFont<'_> {
         pcf.bounding_box = pcf.get_bounding_box();
         pcf.metadata = pcf.load_metadata();
 
+        // TODO
+        pcf.load_glyphs((65..66).collect::<Vec<i32>>().as_slice());
+
         pcf
     }
 
