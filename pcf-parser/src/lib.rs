@@ -442,9 +442,6 @@ impl PcfFont<'_> {
             let encoding_idx = enc - self.encoding.min_byte2;
             let cursor: usize = self.metadata.indices_offset + 2 * encoding_idx;
             let glyph_idx: usize = BigEndian::read_u16(&self.bytes[cursor..cursor + 2]).into();
-            // J is 42
-            // metrics Metrics(left_side_bearing=0, right_side_bearing=9, character_width=11, character_ascent=16, character_descent=-7, character_attributes=0)
-            // bo 1340
             if glyph_idx != 65535 {
                 indices[i] = Some(glyph_idx);
             }
@@ -583,6 +580,7 @@ mod tests {
     use super::*;
 
     const UPPERCASE_A: i32 = 65;
+    const UPPERCASE_J: i32 = 74;
 
     #[test]
     fn it_parses_header() {
@@ -789,6 +787,14 @@ mod tests {
     }
 
     #[test]
+    fn it_loads_indices_for_uppercase_j() {
+        let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
+        let pcf = PcfFont::new(&font[..]);
+        let indices = vec![Some(44)];
+        assert_eq!(indices, pcf.load_glyph_indices(&[&UPPERCASE_J]));
+    }
+
+    #[test]
     fn it_loads_all_metrics_for_uppercase_a() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
         let pcf = PcfFont::new(&font[..]);
@@ -805,6 +811,26 @@ mod tests {
         assert_eq!(
             vec![Some(compressed_metrics)],
             pcf.load_all_metrics(&[&UPPERCASE_A], &indices)
+        );
+    }
+
+    #[test]
+    fn it_loads_all_metrics_for_uppercase_j() {
+        let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
+        let pcf = PcfFont::new(&font[..]);
+        let indices = pcf.load_glyph_indices(&[&UPPERCASE_J]);
+        let compressed_metrics = CompressedMetrics {
+            left_side_bearing: 0,
+            right_side_bearing: 7,
+            character_width: 8,
+            character_ascent: 9,
+            character_descent: 0,
+            character_attributes: 0,
+        };
+
+        assert_eq!(
+            vec![Some(compressed_metrics)],
+            pcf.load_all_metrics(&[&UPPERCASE_J], &indices)
         );
     }
 
