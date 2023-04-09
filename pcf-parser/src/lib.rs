@@ -1,6 +1,6 @@
 #![allow(dead_code)]
-mod glyph;
-mod pcf;
+use byteorder::{BigEndian, ByteOrder, LittleEndian};
+use std::collections::HashMap;
 
 // From https://fontforge.org/docs/techref/pcf-format.html
 // type field
