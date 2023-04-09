@@ -326,6 +326,10 @@ impl PcfFont<'_> {
         cursor += 2;
         let default_char = BigEndian::read_i16(&self.bytes[cursor..cursor + 2]);
 
+        if min_byte1 != 0 || max_byte1 != 0 {
+            panic!("multi-byte encoding currently not supported");
+        }
+
         Encoding {
             min_byte2,
             max_byte2,
