@@ -143,14 +143,8 @@ pub struct Glyph {
 
 impl Glyph {
     pub fn pixel(&self, x: usize, y: usize) -> bool {
-        //let width = usize::try_from(self.bounding_box.size.x).unwrap();
-        //let bytes_per_row = (width + 7) / 8;
-        //let byte_offset = x / 8;
-        //let bit_mask = 0x80 >> (x % 8);
-        //self.bitmap[byte_offset + bytes_per_row * y] & bit_mask != 0
-        //self.bitmap[y * self.width + x] != 0
-
-        true
+        let width = usize::try_from(self.bounding_box.size.x).expect("pixel width failed");
+        self.bitmap[y * width + x] != 0
     }
 }
 
