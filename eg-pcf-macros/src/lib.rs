@@ -3,7 +3,7 @@ use pcf_parser::{BoundingBox, Glyph, PcfFont};
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::quote;
-use std::{convert::TryFrom, fs, path::PathBuf};
+use std::{fs, path::PathBuf};
 use syn::{
     parse::{Parse, ParseStream},
     parse_macro_input,
@@ -121,24 +121,20 @@ fn rectangle_constructor(rectangle: &Rectangle) -> proc_macro2::TokenStream {
     }
 }
 
-fn glyph_literal(
-    glyph: &Glyph,
-    font: &PcfFont,
-    start_index: usize,
-) -> (Vec<bool>, proc_macro2::TokenStream) {
+fn glyph_literal(glyph: &Glyph, start_index: usize) -> (Vec<bool>, proc_macro2::TokenStream) {
     let character = LitChar::new(glyph.encoding.unwrap(), Span::call_site());
 
-    let rectangle = bounding_box_to_rectangle(&font.bounding_box);
+    let rectangle = bounding_box_to_rectangle(&glyph.bounding_box);
     let bounding_box = rectangle_constructor(&rectangle);
 
     // TODO: handle height != 0
     // TODO: check for negative values
-    let device_width = glyph.width as u32;
+    let device_width = glyph.shift_x as u32;
 
     let mut data = Vec::new();
 
-    for y in 0..glyph.height {
-        for x in 0..glyph.width {
+    for y in 0..glyph.bounding_box.size.y as usize {
+        for x in 0..glyph.bounding_box.size.x as usize {
             data.push(glyph.pixel(x, y))
         }
     }
@@ -186,7 +182,7 @@ pub fn include_pcf(input: TokenStream) -> TokenStream {
                 replacement_character = Some(glyphs.len());
             }
 
-            let (glyph_data, literal) = glyph_literal(glyph, &font, data.len());
+            let (glyph_data, literal) = glyph_literal(glyph, data.len());
             glyphs.push(literal);
             data.extend_from_slice(&glyph_data);
         }
