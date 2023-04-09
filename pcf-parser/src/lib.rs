@@ -414,21 +414,13 @@ impl PcfFont<'_> {
         let mut indices = vec![None; code_points.len()];
 
         for (i, code_point) in code_points.iter().enumerate() {
-            let enc1 = (*code_point >> 8) & 0xFF;
-            let enc2 = *code_point & 0xFF;
+            let enc = *code_point & 0xFF;
 
-            if enc1 < self.encoding.min_byte1.into() || enc1 > self.encoding.max_byte1.into() {
+            if enc < self.encoding.min_byte2.into() || enc > self.encoding.max_byte2.into() {
                 continue;
             }
 
-            if enc2 < self.encoding.min_byte2.into() || enc2 > self.encoding.max_byte2.into() {
-                continue;
-            }
-
-            let encoding_idx = (enc1 - self.encoding.min_byte1 as i32)
-                * (self.encoding.max_byte2 as i32 - self.encoding.min_byte2 as i32 + 1)
-                + enc2
-                - self.encoding.min_byte2 as i32;
+            let encoding_idx = enc - self.encoding.min_byte2 as i32;
             let cursor: usize = (self.metadata.indices_offset + 2 * encoding_idx)
                 .try_into()
                 .expect("glyph_idx conversion failed");
