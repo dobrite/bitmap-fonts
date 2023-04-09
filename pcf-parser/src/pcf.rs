@@ -494,13 +494,9 @@ impl PcfFont<'_> {
         let mut index_to_code_point = vec![None; code_points.len()];
         for i in 0..all_metrics.len() {
             if let Some(metrics) = all_metrics[i] {
-                let width: usize = (metrics.right_side_bearing - metrics.left_side_bearing)
-                    .try_into()
-                    .expect("width conversion failed");
-                let height: usize = (metrics.character_ascent + metrics.character_descent)
-                    .try_into()
-                    .expect("height conversion failed");
-                let bitmap = vec![0u8; width * height];
+                let width = metrics.right_side_bearing - metrics.left_side_bearing;
+                let height = metrics.character_ascent + metrics.character_descent;
+                let bitmap = vec![0u8; (width * height).into()];
                 let code_point = *code_points[i];
                 let encoding = u32::try_from(code_point).ok().and_then(std::char::from_u32);
 
@@ -510,10 +506,13 @@ impl PcfFont<'_> {
                     bitmap,
                     code_point,
                     encoding,
-                    width,
-                    height,
-                    dx: metrics.left_side_bearing as i32,
-                    dy: -(metrics.character_descent as i32),
+                    bounding_box: BoundingBox {
+                        size: Coord::new(width.into(), height.into()),
+                        offset: Coord::new(
+                            metrics.left_side_bearing as i32,
+                            -(metrics.character_descent as i32),
+                        ),
+                    },
                     shift_x: metrics.character_width as i32,
                     shift_y: 0,
                     tile_index: 0,
@@ -825,10 +824,10 @@ mod tests {
                 0, 1, 0, 0, 0, 0, 1,
                 1, 0, 0, 0, 0, 0, 1,
             ],
-            width: 7,
-            height: 9,
-            dx: 0,
-            dy: 0,
+            bounding_box: BoundingBox {
+                size: Coord::new(7, 9),
+                offset: Coord::new(0, 0),
+            },
             shift_x: 8,
             shift_y: 0,
             tile_index: 0,
