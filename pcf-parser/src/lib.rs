@@ -900,4 +900,38 @@ mod tests {
         let glyph = &pcf.glyphs[&UPPERCASE_A];
         assert_eq!(expected, *glyph);
     }
+
+    #[test]
+    fn it_has_an_uppercase_j() {
+        let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
+        let mut pcf = PcfFont::new(&font[..]);
+        pcf.load_glyphs(&[UPPERCASE_J]);
+        #[rustfmt::skip]
+        let expected = Glyph {
+            code_point: UPPERCASE_J,
+            encoding: Some('J'),
+            bitmap: vec![
+                0, 0, 1,
+                0, 0, 1,
+                0, 0, 1,
+                0, 0, 1,
+                0, 0, 1,
+                0, 0, 1,
+                0, 0, 1,
+                0, 0, 1,
+                0, 0, 1,
+                0, 0, 1,
+                1, 1, 0,
+            ],
+            bounding_box: BoundingBox {
+                size: Coord { x: 3, y: 11 },
+                offset: Coord { x: -1, y: -2 },
+            },
+            shift_x: 3,
+            shift_y: 0,
+            tile_index: 0,
+        };
+        let glyph = &pcf.glyphs[&UPPERCASE_J];
+        assert_eq!(expected, *glyph);
+    }
 }
