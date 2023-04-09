@@ -1,12 +1,11 @@
+use crate::BoundingBox;
+
 #[derive(Debug, PartialEq)]
 pub struct Glyph {
     pub code_point: i32,
     pub encoding: Option<char>,
     pub bitmap: Vec<u8>,
-    pub width: usize,
-    pub height: usize,
-    pub dx: i32,
-    pub dy: i32,
+    pub bounding_box: BoundingBox,
     pub shift_x: i32,
     pub shift_y: i32,
     pub tile_index: i32,
@@ -26,8 +25,8 @@ impl Glyph {
             "{:?} {:?} {:?} {:?} {:?}",
             x,
             y,
-            self.width,
-            self.height,
+            self.bounding_box.size.x,
+            self.bounding_box.size.y,
             self.bitmap.len()
         );
         //self.bitmap[y * self.width + x] != 0
