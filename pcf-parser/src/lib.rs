@@ -406,7 +406,7 @@ impl PcfFont<'_> {
         }
     }
 
-    fn load_indices(&self, code_points: &[&i32]) -> Vec<Option<i32>> {
+    fn load_glyph_indices(&self, code_points: &[&i32]) -> Vec<Option<i32>> {
         let mut indices = vec![None; code_points.len()];
 
         for (i, code_point) in code_points.iter().enumerate() {
@@ -496,7 +496,7 @@ impl PcfFont<'_> {
             return;
         };
 
-        let indices = self.load_indices(&code_points);
+        let indices = self.load_glyph_indices(&code_points);
 
         if !self.metadata.is_metrics_compressed {
             panic!("uncompressed metrics unimplemented");
@@ -769,14 +769,14 @@ mod tests {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
         let pcf = PcfFont::new(&font[..]);
         let indices = vec![Some(35)];
-        assert_eq!(indices, pcf.load_indices(&[&65]));
+        assert_eq!(indices, pcf.load_glyph_indices(&[&65]));
     }
 
     #[test]
     fn it_loads_all_metrics() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
         let pcf = PcfFont::new(&font[..]);
-        let indices = pcf.load_indices(&[&65]);
+        let indices = pcf.load_glyph_indices(&[&65]);
         let compressed_metrics = CompressedMetrics {
             left_side_bearing: 0,
             right_side_bearing: 7,
@@ -796,7 +796,7 @@ mod tests {
     fn it_loads_bitmap_offsets() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
         let pcf = PcfFont::new(&font[..]);
-        let indices = pcf.load_indices(&[&65]);
+        let indices = pcf.load_glyph_indices(&[&65]);
 
         assert_eq!(vec![Some(960)], pcf.load_bitmap_offsets(&[&65], &indices));
     }
