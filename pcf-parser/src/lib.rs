@@ -442,6 +442,9 @@ impl PcfFont<'_> {
             let encoding_idx = enc - self.encoding.min_byte2;
             let cursor: usize = self.metadata.indices_offset + 2 * encoding_idx;
             let glyph_idx: usize = BigEndian::read_u16(&self.bytes[cursor..cursor + 2]).into();
+            // J is 42
+            // metrics Metrics(left_side_bearing=0, right_side_bearing=9, character_width=11, character_ascent=16, character_descent=-7, character_attributes=0)
+            // bo 1340
             if glyph_idx != 65535 {
                 indices[i] = Some(glyph_idx);
             }
@@ -578,6 +581,8 @@ impl PcfFont<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const UPPERCASE_A: i32 = 65;
 
     #[test]
     fn it_parses_header() {
@@ -776,18 +781,18 @@ mod tests {
     }
 
     #[test]
-    fn it_loads_indices() {
+    fn it_loads_indices_for_uppercase_a() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
         let pcf = PcfFont::new(&font[..]);
         let indices = vec![Some(35)];
-        assert_eq!(indices, pcf.load_glyph_indices(&[&65]));
+        assert_eq!(indices, pcf.load_glyph_indices(&[&UPPERCASE_A]));
     }
 
     #[test]
-    fn it_loads_all_metrics() {
+    fn it_loads_all_metrics_for_uppercase_a() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
         let pcf = PcfFont::new(&font[..]);
-        let indices = pcf.load_glyph_indices(&[&65]);
+        let indices = pcf.load_glyph_indices(&[&UPPERCASE_A]);
         let compressed_metrics = CompressedMetrics {
             left_side_bearing: 0,
             right_side_bearing: 7,
@@ -799,17 +804,20 @@ mod tests {
 
         assert_eq!(
             vec![Some(compressed_metrics)],
-            pcf.load_all_metrics(&[&65], &indices)
+            pcf.load_all_metrics(&[&UPPERCASE_A], &indices)
         );
     }
 
     #[test]
-    fn it_loads_bitmap_offsets() {
+    fn it_loads_bitmap_offsets_for_uppercase_a() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
         let pcf = PcfFont::new(&font[..]);
-        let indices = pcf.load_glyph_indices(&[&65]);
+        let indices = pcf.load_glyph_indices(&[&UPPERCASE_A]);
 
-        assert_eq!(vec![Some(960)], pcf.load_bitmap_offsets(&[&65], &indices));
+        assert_eq!(
+            vec![Some(960)],
+            pcf.load_bitmap_offsets(&[&UPPERCASE_A], &indices)
+        );
     }
 
     // from python
@@ -824,10 +832,10 @@ mod tests {
     fn it_has_an_uppercase_a() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
         let mut pcf = PcfFont::new(&font[..]);
-        pcf.load_glyphs(&[65]);
+        pcf.load_glyphs(&[UPPERCASE_A]);
         #[rustfmt::skip]
         let expected = Glyph {
-            code_point: 65,
+            code_point: UPPERCASE_A,
             encoding: Some('A'),
             bitmap: vec![
                 0, 0, 0, 1, 0, 0, 0,
@@ -848,7 +856,7 @@ mod tests {
             shift_y: 0,
             tile_index: 0,
         };
-        let glyph = pcf.glyphs.get(&65).unwrap();
+        let glyph = pcf.glyphs.get(&UPPERCASE_A).unwrap();
         assert_eq!(expected, *glyph);
     }
 }
