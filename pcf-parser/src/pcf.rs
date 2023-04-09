@@ -523,32 +523,23 @@ impl PcfFont<'_> {
         }
 
         for i in 0..code_points.len() {
-            if let Some(metrics) = all_metrics[i] {
-                let offset: usize = (self.metadata.first_bitmap_offset
-                    + bitmap_offsets[i].unwrap())
-                .try_into()
-                .unwrap();
-                let width: usize = (metrics.right_side_bearing - metrics.left_side_bearing)
-                    .try_into()
-                    .unwrap();
-                let height: usize = (metrics.character_ascent + metrics.character_descent)
-                    .try_into()
-                    .unwrap();
-
+            let code_point = index_to_code_point[i].as_mut().expect("no bitmap found");
+            if let Some(glyph) = self.glyphs.get_mut(code_point) {
+                let offset = self.metadata.first_bitmap_offset + bitmap_offsets[i].unwrap();
+                let width = glyph.bounding_box.size.x;
+                let height = glyph.bounding_box.size.y;
                 let words_per_row = (width + 31) / 32;
                 let bytes_per_row = 4 * words_per_row;
-                let code_point = index_to_code_point[i].as_mut().expect("no bitmap found");
-                let glyph = self.glyphs.get_mut(code_point).unwrap();
                 for y in 0..height {
                     for x in 0..width {
                         let idx = offset + (bytes_per_row * y);
-                        let byte = self.bytes[idx];
+                        let byte = self.bytes[idx as usize];
                         let mask = 128 >> (x % 8);
                         let masked = byte & mask;
                         let on = masked != 0;
 
                         if on {
-                            glyph.bitmap[y * width + x] = 1;
+                            glyph.bitmap[(y * width + x) as usize] = 1;
                         }
                     }
                 }
