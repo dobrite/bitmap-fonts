@@ -381,7 +381,7 @@ impl PcfFont<'_> {
         cursor += 4;
         let four = BigEndian::read_i32(&self.bytes[cursor..cursor + 4]);
 
-        let bitmap_sizes = [one, two, three, four][(format & 3)];
+        let bitmap_sizes = [one, two, three, four][format & 3];
 
         Bitmap {
             glyph_count: glyph_count.try_into().unwrap(),
@@ -548,7 +548,7 @@ impl PcfFont<'_> {
                     let on = masked != 0;
 
                     if on {
-                        glyph.bitmap[(y * width + x)] = 1;
+                        glyph.bitmap[y * width + x] = 1;
                     }
                 }
             }
