@@ -186,33 +186,33 @@ impl PcfFont<'_> {
     }
 
     fn read_tables(&self) -> HashMap<usize, Table> {
-        let mut tables = HashMap::new();
-        let mut cursor = 8;
-        for _ in 0..self.table_count() {
-            let r#type = LittleEndian::read_i32(&self.bytes[cursor..cursor + 4])
-                .try_into()
-                .expect("unable to convert type i32 into usize");
-            let format = LittleEndian::read_i32(&self.bytes[cursor + 4..cursor + 8])
-                .try_into()
-                .expect("unable to convert format i32 into usize");
-            let size = LittleEndian::read_i32(&self.bytes[cursor + 8..cursor + 12])
-                .try_into()
-                .expect("unable to convert size i32 into usize");
-            let offset = LittleEndian::read_i32(&self.bytes[cursor + 12..cursor + 16])
-                .try_into()
-                .expect("unable to convert offset i32 into usize");
+        (0..self.table_count())
+            .fold((8, HashMap::new()), |(mut cursor, mut tables), _| {
+                let r#type = LittleEndian::read_i32(&self.bytes[cursor..cursor + 4])
+                    .try_into()
+                    .expect("unable to convert type i32 into usize");
+                let format = LittleEndian::read_i32(&self.bytes[cursor + 4..cursor + 8])
+                    .try_into()
+                    .expect("unable to convert format i32 into usize");
+                let size = LittleEndian::read_i32(&self.bytes[cursor + 8..cursor + 12])
+                    .try_into()
+                    .expect("unable to convert size i32 into usize");
+                let offset = LittleEndian::read_i32(&self.bytes[cursor + 12..cursor + 16])
+                    .try_into()
+                    .expect("unable to convert offset i32 into usize");
 
-            let table = Table {
-                format,
-                size,
-                offset,
-            };
+                let table = Table {
+                    format,
+                    size,
+                    offset,
+                };
 
-            tables.insert(r#type, table);
-            cursor += 16;
-        }
+                tables.insert(r#type, table);
+                cursor += 16;
 
-        tables
+                (cursor, tables)
+            })
+            .1
     }
 
     fn read_accelerators(&self) -> Accelerators {
@@ -435,133 +435,137 @@ impl PcfFont<'_> {
 
         let all_metrics = self.load_all_metrics(&indices);
         let bitmap_offsets = self.load_bitmap_offsets(&indices);
-        let mut glyphs = self.create_glyphs(&all_metrics);
-        self.fill_glyph_bitmaps(&mut glyphs, &bitmap_offsets);
-
-        self.glyphs = glyphs;
+        let glyphs = self.create_glyphs(&all_metrics);
+        self.glyphs = self.fill_glyph_bitmaps(glyphs, &bitmap_offsets);
     }
 
     fn load_glyph_indices(&self) -> HashMap<i32, usize> {
-        let mut indices = HashMap::new();
+        (0..=(u16::MAX as i32))
+            .filter_map(|code_point| {
+                let enc1 = ((code_point >> 8) & 0xFF) as usize;
+                let enc2 = (code_point & 0xFF) as usize;
 
-        for code_point in 0..=(u16::MAX as i32) {
-            let enc1 = ((code_point >> 8) & 0xFF) as usize;
-            let enc2 = (code_point & 0xFF) as usize;
+                if enc1 < self.encoding.min_byte1 || enc1 > self.encoding.max_byte1 {
+                    return None;
+                }
 
-            if enc1 < self.encoding.min_byte1 || enc1 > self.encoding.max_byte1 {
-                continue;
-            }
-            if enc2 < self.encoding.min_byte2 || enc2 > self.encoding.max_byte2 {
-                continue;
-            }
+                if enc2 < self.encoding.min_byte2 || enc2 > self.encoding.max_byte2 {
+                    return None;
+                }
 
-            let encoding_idx = (enc1 - self.encoding.min_byte1)
-                * (self.encoding.max_byte2 - self.encoding.min_byte2 + 1)
-                + enc2
-                - self.encoding.min_byte2;
+                let encoding_idx = (enc1 - self.encoding.min_byte1)
+                    * (self.encoding.max_byte2 - self.encoding.min_byte2 + 1)
+                    + enc2
+                    - self.encoding.min_byte2;
 
-            let cursor: usize = self.metadata.indices_offset + 2 * encoding_idx;
-            let glyph_idx: usize = BigEndian::read_u16(&self.bytes[cursor..cursor + 2]).into();
-            if glyph_idx != 65535 {
-                indices.insert(code_point, glyph_idx);
-            }
-        }
-
-        indices
+                let cursor: usize = self.metadata.indices_offset + 2 * encoding_idx;
+                let glyph_idx: usize = BigEndian::read_u16(&self.bytes[cursor..cursor + 2]).into();
+                if glyph_idx != 65535 {
+                    Some((code_point, glyph_idx))
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     fn load_all_metrics(&self, indices: &HashMap<i32, usize>) -> HashMap<i32, CompressedMetrics> {
-        let mut all_metrics = HashMap::new();
-        for (code_point, index) in indices.iter() {
-            let cursor: usize =
-                self.metadata.first_metric_offset + self.metadata.metrics_size * index;
-            let metrics = self.read_compressed_metrics(cursor);
+        indices
+            .iter()
+            .map(|(code_point, index)| {
+                let cursor: usize =
+                    self.metadata.first_metric_offset + self.metadata.metrics_size * index;
+                let metrics = self.read_compressed_metrics(cursor);
 
-            all_metrics.insert(*code_point, metrics);
-        }
-
-        all_metrics
+                (*code_point, metrics)
+            })
+            .collect()
     }
 
     fn load_bitmap_offsets(&self, indices: &HashMap<i32, usize>) -> HashMap<i32, usize> {
-        let mut bitmap_offsets = HashMap::new();
-        for (code_point, index) in indices.iter() {
-            let cursor: usize = self.metadata.bitmap_offset_offsets + 4 * index;
-            let bitmap_offset: usize = BigEndian::read_u32(&self.bytes[cursor..cursor + 4])
-                .try_into()
-                .unwrap();
-            bitmap_offsets.insert(*code_point, bitmap_offset);
-        }
+        indices
+            .iter()
+            .map(|(code_point, index)| {
+                let cursor: usize = self.metadata.bitmap_offset_offsets + 4 * index;
+                let bitmap_offset: usize = BigEndian::read_u32(&self.bytes[cursor..cursor + 4])
+                    .try_into()
+                    .unwrap();
 
-        bitmap_offsets
+                (*code_point, bitmap_offset)
+            })
+            .collect()
     }
 
     fn create_glyphs(&self, all_metrics: &HashMap<i32, CompressedMetrics>) -> HashMap<i32, Glyph> {
-        let mut glyphs = HashMap::new();
+        all_metrics
+            .iter()
+            .map(|(code_point, metrics)| {
+                let width: i32 = (metrics.right_side_bearing - metrics.left_side_bearing)
+                    .try_into()
+                    .unwrap();
+                let height: i32 = (metrics.character_ascent + metrics.character_descent)
+                    .try_into()
+                    .unwrap();
+                let len = (width * height).try_into().expect("width * height failed");
+                let bitmap = vec![0u8; len];
+                let encoding = u32::try_from(*code_point)
+                    .ok()
+                    .and_then(std::char::from_u32);
 
-        for (code_point, metrics) in all_metrics.iter() {
-            let width: i32 = (metrics.right_side_bearing - metrics.left_side_bearing)
-                .try_into()
-                .unwrap();
-            let height: i32 = (metrics.character_ascent + metrics.character_descent)
-                .try_into()
-                .unwrap();
-            let len = (width * height).try_into().expect("width * height failed");
-            let bitmap = vec![0u8; len];
-            let encoding = u32::try_from(*code_point)
-                .ok()
-                .and_then(std::char::from_u32);
+                let glyph = Glyph {
+                    bitmap,
+                    code_point: *code_point,
+                    encoding,
+                    bounding_box: BoundingBox {
+                        size: Coord::new(width, height),
+                        offset: Coord::new(
+                            metrics.left_side_bearing as i32,
+                            -(metrics.character_descent as i32),
+                        ),
+                    },
+                    shift_x: metrics.character_width as i32,
+                    shift_y: 0,
+                    tile_index: 0,
+                };
 
-            let glyph = Glyph {
-                bitmap,
-                code_point: *code_point,
-                encoding,
-                bounding_box: BoundingBox {
-                    size: Coord::new(width, height),
-                    offset: Coord::new(
-                        metrics.left_side_bearing as i32,
-                        -(metrics.character_descent as i32),
-                    ),
-                },
-                shift_x: metrics.character_width as i32,
-                shift_y: 0,
-                tile_index: 0,
-            };
-
-            glyphs.insert(*code_point, glyph);
-        }
-
-        glyphs
+                (*code_point, glyph)
+            })
+            .collect()
     }
 
     fn fill_glyph_bitmaps(
         &self,
-        glyphs: &mut HashMap<i32, Glyph>,
+        glyphs: HashMap<i32, Glyph>,
         bitmap_offsets: &HashMap<i32, usize>,
-    ) {
-        for (code_point, glyph) in glyphs.iter_mut() {
-            let offset = self.metadata.first_bitmap_offset + bitmap_offsets[code_point];
-            let width = glyph.bounding_box.size.x as usize;
-            let height = glyph.bounding_box.size.y as usize;
-            let words_per_row = (width + 31) / 32;
-            let bytes_per_row = 4 * words_per_row;
-            for y in 0..height {
-                let start = offset + bytes_per_row * y;
-                let end = start + bytes_per_row;
-                let row = &self.bytes[start..end];
-                for x in 0..width {
-                    let idx = x / 8;
-                    let byte = row[idx];
-                    let mask = 128 >> (x % 8);
-                    let masked = byte & mask;
-                    let on = masked != 0;
+    ) -> HashMap<i32, Glyph> {
+        glyphs
+            .into_iter()
+            .map(|(code_point, mut glyph)| {
+                let offset = self.metadata.first_bitmap_offset + bitmap_offsets[&code_point];
+                let width = glyph.bounding_box.size.x as usize;
+                let height = glyph.bounding_box.size.y as usize;
+                let words_per_row = (width + 31) / 32;
+                let bytes_per_row = 4 * words_per_row;
+                for y in 0..height {
+                    let start = offset + bytes_per_row * y;
+                    let end = start + bytes_per_row;
+                    let row = &self.bytes[start..end];
+                    for x in 0..width {
+                        let idx = x / 8;
+                        let byte = row[idx];
+                        let mask = 128 >> (x % 8);
+                        let masked = byte & mask;
+                        let on = masked != 0;
 
-                    if on {
-                        glyph.bitmap[y * width + x] = 1;
+                        if on {
+                            glyph.bitmap[y * width + x] = 1;
+                        }
                     }
                 }
-            }
-        }
+
+                (code_point, glyph)
+            })
+            .collect()
     }
 }
 
