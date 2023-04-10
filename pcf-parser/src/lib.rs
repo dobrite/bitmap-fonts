@@ -15,21 +15,21 @@ const PCF_GLYPH_NAMES: usize = 1 << 7;
 const PCF_BDF_ACCELERATORS: usize = 1 << 8;
 
 // format field
-const PCF_DEFAULT_FORMAT: usize = 0x00000000;
-const PCF_INKBOUNDS: usize = 0x00000200;
-const PCF_ACCEL_W_INKBOUNDS: usize = 0x00000100;
-const PCF_COMPRESSED_METRICS: usize = 0x00000100;
+const PCF_DEFAULT_FORMAT: i32 = 0x00000000;
+const PCF_INKBOUNDS: i32 = 0x00000200;
+const PCF_ACCEL_W_INKBOUNDS: i32 = 0x00000100;
+const PCF_COMPRESSED_METRICS: i32 = 0x00000100;
 
 // format field modifiers
-const PCF_GLYPH_PAD_MASK: usize = 3; // See the bitmap table for explanation
-const PCF_BYTE_MASK: usize = 1 << 2; // If set then Most Sig Byte First
-const PCF_BIT_MASK: usize = 1 << 3; // If set then Most Sig Bit First
-const PCF_SCAN_UNIT_MASK: usize = 3 << 4; // See the bitmap table for explanation
+const PCF_GLYPH_PAD_MASK: i32 = 3; // See the bitmap table for explanation
+const PCF_BYTE_MASK: i32 = 1 << 2; // If set then Most Sig Byte First
+const PCF_BIT_MASK: i32 = 1 << 3; // If set then Most Sig Bit First
+const PCF_SCAN_UNIT_MASK: i32 = 3 << 4; // See the bitmap table for explanation
 
 #[derive(Debug, PartialEq)]
 struct Table {
-    format: usize,
-    size: usize,
+    format: i32,
+    size: i32,
     offset: usize,
 }
 
@@ -124,7 +124,7 @@ struct Metadata {
     indices_offset: usize,
     bitmap_offset_offsets: usize,
     first_bitmap_offset: usize,
-    metrics_compressed_raw: usize,
+    metrics_compressed_raw: i32,
     is_metrics_compressed: bool,
     first_metric_offset: usize,
     metrics_size: usize,
@@ -181,22 +181,14 @@ impl PcfFont<'_> {
         &self.tables
     }
 
-    fn bitmap_format(&self) -> usize {
-        self.tables.get(&PCF_BITMAPS).unwrap().format
-    }
-
     fn read_tables(&self) -> HashMap<usize, Table> {
         (0..self.table_count())
             .fold((8, HashMap::new()), |(mut cursor, mut tables), _| {
                 let r#type = LittleEndian::read_i32(&self.bytes[cursor..cursor + 4])
                     .try_into()
                     .expect("unable to convert type i32 into usize");
-                let format = LittleEndian::read_i32(&self.bytes[cursor + 4..cursor + 8])
-                    .try_into()
-                    .expect("unable to convert format i32 into usize");
-                let size = LittleEndian::read_i32(&self.bytes[cursor + 8..cursor + 12])
-                    .try_into()
-                    .expect("unable to convert size i32 into usize");
+                let format = LittleEndian::read_i32(&self.bytes[cursor + 4..cursor + 8]);
+                let size = LittleEndian::read_i32(&self.bytes[cursor + 8..cursor + 12]);
                 let offset = LittleEndian::read_i32(&self.bytes[cursor + 12..cursor + 16])
                     .try_into()
                     .expect("unable to convert offset i32 into usize");
@@ -226,9 +218,7 @@ impl PcfFont<'_> {
         let table = accelerators.unwrap();
 
         let mut cursor = table.offset;
-        let format: usize = LittleEndian::read_i32(&self.bytes[cursor..cursor + 4])
-            .try_into()
-            .unwrap();
+        let format = LittleEndian::read_i32(&self.bytes[cursor..cursor + 4]);
         cursor += 4;
 
         assert!(format & PCF_BYTE_MASK != 0, "Only big endian supported");
@@ -324,9 +314,7 @@ impl PcfFont<'_> {
         let table = encoding.expect("No encoding table found");
 
         let mut cursor = table.offset;
-        let format: usize = LittleEndian::read_i32(&self.bytes[cursor..cursor + 4])
-            .try_into()
-            .unwrap();
+        let format = LittleEndian::read_i32(&self.bytes[cursor..cursor + 4]);
         cursor += 4;
 
         assert!(
@@ -359,9 +347,7 @@ impl PcfFont<'_> {
         let table = bitmap.expect("No bitmap table found");
 
         let mut cursor = table.offset;
-        let format: usize = LittleEndian::read_i32(&self.bytes[cursor..cursor + 4])
-            .try_into()
-            .unwrap();
+        let format = LittleEndian::read_i32(&self.bytes[cursor..cursor + 4]);
         cursor += 4;
 
         assert!(
@@ -381,7 +367,7 @@ impl PcfFont<'_> {
         cursor += 4;
         let four = BigEndian::read_i32(&self.bytes[cursor..cursor + 4]);
 
-        let bitmap_sizes = [one, two, three, four][format & 3];
+        let bitmap_sizes = [one, two, three, four][format as usize & 3];
 
         Bitmap {
             glyph_count: glyph_count.try_into().unwrap(),
@@ -734,13 +720,6 @@ mod tests {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
         let pcf = PcfFont::new(&font[..]);
         assert_eq!(bitmap, pcf.bitmap);
-    }
-
-    #[test]
-    fn it_parses_bitmap_format() {
-        let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
-        let pcf = PcfFont::new(&font[..]);
-        assert_eq!(0xE, pcf.bitmap_format());
     }
 
     #[test]
