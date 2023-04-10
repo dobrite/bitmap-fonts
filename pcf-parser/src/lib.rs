@@ -343,10 +343,6 @@ impl PcfFont<'_> {
         cursor += 2;
         let default_char = BigEndian::read_i16(&self.bytes[cursor..cursor + 2]);
 
-        if min_byte1 != 0 || max_byte1 != 0 {
-            panic!("multi-byte encoding currently not supported");
-        }
-
         Encoding {
             min_byte2: min_byte2.try_into().unwrap(),
             max_byte2: max_byte2.try_into().unwrap(),
@@ -433,13 +429,21 @@ impl PcfFont<'_> {
         let mut code_point_to_index = HashMap::new();
 
         for code_point in code_points {
-            let enc = (*code_point & 0xFF) as usize;
+            let enc1 = ((*code_point >> 8) & 0xFF) as usize;
+            let enc2 = (*code_point & 0xFF) as usize;
 
-            if enc < self.encoding.min_byte2 || enc > self.encoding.max_byte2 {
+            if enc1 < self.encoding.min_byte1 || enc1 > self.encoding.max_byte1 {
+                continue;
+            }
+            if enc2 < self.encoding.min_byte2 || enc2 > self.encoding.max_byte2 {
                 continue;
             }
 
-            let encoding_idx = enc - self.encoding.min_byte2;
+            let encoding_idx = (enc1 - self.encoding.min_byte1)
+                * (self.encoding.max_byte2 - self.encoding.min_byte2 + 1)
+                + enc2
+                - self.encoding.min_byte2;
+
             let cursor: usize = self.metadata.indices_offset + 2 * encoding_idx;
             let glyph_idx: usize = BigEndian::read_u16(&self.bytes[cursor..cursor + 2]).into();
             if glyph_idx != 65535 {
