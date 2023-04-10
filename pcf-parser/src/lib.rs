@@ -426,6 +426,21 @@ impl PcfFont<'_> {
         }
     }
 
+    fn load_glyphs(&mut self) {
+        let indices = self.load_glyph_indices();
+
+        if !self.metadata.is_metrics_compressed {
+            panic!("uncompressed metrics unimplemented");
+        }
+
+        let all_metrics = self.load_all_metrics(&indices);
+        let bitmap_offsets = self.load_bitmap_offsets(&indices);
+        let mut glyphs = self.create_glyphs(&all_metrics);
+        self.fill_glyph_bitmaps(&mut glyphs, &bitmap_offsets);
+
+        self.glyphs = glyphs;
+    }
+
     fn load_glyph_indices(&self) -> HashMap<i32, usize> {
         let mut indices = HashMap::new();
 
@@ -519,17 +534,11 @@ impl PcfFont<'_> {
         glyphs
     }
 
-    fn load_glyphs(&mut self) {
-        let indices = self.load_glyph_indices();
-
-        if !self.metadata.is_metrics_compressed {
-            panic!("uncompressed metrics unimplemented");
-        }
-
-        let all_metrics = self.load_all_metrics(&indices);
-        let bitmap_offsets = self.load_bitmap_offsets(&indices);
-        let mut glyphs = self.create_glyphs(&all_metrics);
-
+    fn fill_glyph_bitmaps(
+        &self,
+        glyphs: &mut HashMap<i32, Glyph>,
+        bitmap_offsets: &HashMap<i32, usize>,
+    ) {
         for (code_point, glyph) in glyphs.iter_mut() {
             let offset = self.metadata.first_bitmap_offset + bitmap_offsets[code_point];
             let width = glyph.bounding_box.size.x as usize;
@@ -553,8 +562,6 @@ impl PcfFont<'_> {
                 }
             }
         }
-
-        self.glyphs = glyphs;
     }
 }
 
