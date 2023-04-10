@@ -161,6 +161,7 @@ impl PcfFont<'_> {
         pcf.bitmap = pcf.read_bitmap();
         pcf.bounding_box = pcf.get_bounding_box();
         pcf.metadata = pcf.load_metadata();
+        pcf.load_glyphs();
 
         pcf
     }
@@ -425,12 +426,12 @@ impl PcfFont<'_> {
         }
     }
 
-    fn load_glyph_indices<'a>(&'a self, code_points: &[&'a i32]) -> HashMap<&i32, Option<usize>> {
-        let mut code_point_to_index = HashMap::new();
+    fn load_glyph_indices(&self) -> HashMap<i32, usize> {
+        let mut indices = HashMap::new();
 
-        for code_point in code_points {
-            let enc1 = ((*code_point >> 8) & 0xFF) as usize;
-            let enc2 = (*code_point & 0xFF) as usize;
+        for code_point in 0..=(u16::MAX as i32) {
+            let enc1 = ((code_point >> 8) & 0xFF) as usize;
+            let enc2 = (code_point & 0xFF) as usize;
 
             if enc1 < self.encoding.min_byte1 || enc1 > self.encoding.max_byte1 {
                 continue;
@@ -447,150 +448,109 @@ impl PcfFont<'_> {
             let cursor: usize = self.metadata.indices_offset + 2 * encoding_idx;
             let glyph_idx: usize = BigEndian::read_u16(&self.bytes[cursor..cursor + 2]).into();
             if glyph_idx != 65535 {
-                code_point_to_index.insert(*code_point, Some(glyph_idx));
+                indices.insert(code_point, glyph_idx);
             }
         }
 
-        code_point_to_index
+        indices
     }
 
-    fn load_all_metrics<'a>(
-        &'a self,
-        code_points: &[&'a i32],
-        indices: &HashMap<&i32, Option<usize>>,
-    ) -> HashMap<&i32, Option<CompressedMetrics>> {
+    fn load_all_metrics(&self, indices: &HashMap<i32, usize>) -> HashMap<i32, CompressedMetrics> {
         let mut all_metrics = HashMap::new();
-        for code_point in code_points {
-            if let Some(index) = indices[code_point] {
-                let cursor: usize =
-                    self.metadata.first_metric_offset + self.metadata.metrics_size * index;
-                let metrics = self.read_compressed_metrics(cursor);
+        for (code_point, index) in indices.iter() {
+            let cursor: usize =
+                self.metadata.first_metric_offset + self.metadata.metrics_size * index;
+            let metrics = self.read_compressed_metrics(cursor);
 
-                all_metrics.insert(*code_point, Some(metrics));
-            } else {
-                continue;
-            }
+            all_metrics.insert(*code_point, metrics);
         }
 
         all_metrics
     }
 
-    fn load_bitmap_offsets<'a>(
-        &'a self,
-        code_points: &[&'a i32],
-        indices: &HashMap<&i32, Option<usize>>,
-    ) -> HashMap<&i32, Option<usize>> {
+    fn load_bitmap_offsets(&self, indices: &HashMap<i32, usize>) -> HashMap<i32, usize> {
         let mut bitmap_offsets = HashMap::new();
-        for code_point in code_points {
-            if let Some(index) = indices[code_point] {
-                let cursor: usize = self.metadata.bitmap_offset_offsets + 4 * index;
-                let bitmap_offset: usize = BigEndian::read_u32(&self.bytes[cursor..cursor + 4])
-                    .try_into()
-                    .unwrap();
-                bitmap_offsets.insert(*code_point, Some(bitmap_offset));
-            } else {
-                continue;
-            }
+        for (code_point, index) in indices.iter() {
+            let cursor: usize = self.metadata.bitmap_offset_offsets + 4 * index;
+            let bitmap_offset: usize = BigEndian::read_u32(&self.bytes[cursor..cursor + 4])
+                .try_into()
+                .unwrap();
+            bitmap_offsets.insert(*code_point, bitmap_offset);
         }
 
         bitmap_offsets
     }
 
-    fn create_glyphs<'a>(
-        &'a self,
-        code_points: &[&'a i32],
-        all_metrics: &HashMap<&i32, Option<CompressedMetrics>>,
-    ) -> HashMap<i32, Glyph> {
+    fn create_glyphs(&self, all_metrics: &HashMap<i32, CompressedMetrics>) -> HashMap<i32, Glyph> {
         let mut glyphs = HashMap::new();
 
-        for code_point in code_points {
-            if let Some(metrics) = all_metrics[code_point] {
-                let width: i32 = (metrics.right_side_bearing - metrics.left_side_bearing)
-                    .try_into()
-                    .unwrap();
-                let height: i32 = (metrics.character_ascent + metrics.character_descent)
-                    .try_into()
-                    .unwrap();
-                let len = (width * height).try_into().expect("width * height failed");
-                let bitmap = vec![0u8; len];
-                let encoding = u32::try_from(**code_point)
-                    .ok()
-                    .and_then(std::char::from_u32);
+        for (code_point, metrics) in all_metrics.iter() {
+            let width: i32 = (metrics.right_side_bearing - metrics.left_side_bearing)
+                .try_into()
+                .unwrap();
+            let height: i32 = (metrics.character_ascent + metrics.character_descent)
+                .try_into()
+                .unwrap();
+            let len = (width * height).try_into().expect("width * height failed");
+            let bitmap = vec![0u8; len];
+            let encoding = u32::try_from(*code_point)
+                .ok()
+                .and_then(std::char::from_u32);
 
-                let glyph = Glyph {
-                    bitmap,
-                    code_point: **code_point,
-                    encoding,
-                    bounding_box: BoundingBox {
-                        size: Coord::new(width, height),
-                        offset: Coord::new(
-                            metrics.left_side_bearing as i32,
-                            -(metrics.character_descent as i32),
-                        ),
-                    },
-                    shift_x: metrics.character_width as i32,
-                    shift_y: 0,
-                    tile_index: 0,
-                };
+            let glyph = Glyph {
+                bitmap,
+                code_point: *code_point,
+                encoding,
+                bounding_box: BoundingBox {
+                    size: Coord::new(width, height),
+                    offset: Coord::new(
+                        metrics.left_side_bearing as i32,
+                        -(metrics.character_descent as i32),
+                    ),
+                },
+                shift_x: metrics.character_width as i32,
+                shift_y: 0,
+                tile_index: 0,
+            };
 
-                glyphs.insert(**code_point, glyph);
-            }
+            glyphs.insert(*code_point, glyph);
         }
 
         glyphs
     }
 
-    fn load_glyphs(&mut self, code_points: &[i32]) {
-        // if isinstance(code_points, int):
-        //     code_points = (code_points,)
-        // elif isinstance(code_points, str):
-        //     code_points = [ord(c) for c in code_points]
-
-        let code_points = code_points
-            .iter()
-            .filter(|cp| !self.glyphs.contains_key(cp))
-            .collect::<Vec<_>>();
-
-        if code_points.is_empty() {
-            return;
-        };
-
-        let code_point_to_index = self.load_glyph_indices(&code_points);
+    fn load_glyphs(&mut self) {
+        let indices = self.load_glyph_indices();
 
         if !self.metadata.is_metrics_compressed {
             panic!("uncompressed metrics unimplemented");
         }
 
-        let all_metrics = self.load_all_metrics(&code_points, &code_point_to_index);
-        let bitmap_offsets = self.load_bitmap_offsets(&code_points, &code_point_to_index);
-        let mut glyphs = self.create_glyphs(&code_points, &all_metrics);
+        let all_metrics = self.load_all_metrics(&indices);
+        let bitmap_offsets = self.load_bitmap_offsets(&indices);
+        let mut glyphs = self.create_glyphs(&all_metrics);
 
-        for code_point in code_points {
-            if let Some(glyph) = glyphs.get_mut(code_point) {
-                let offset =
-                    self.metadata.first_bitmap_offset + bitmap_offsets[code_point].unwrap();
-                let width = glyph.bounding_box.size.x as usize;
-                let height = glyph.bounding_box.size.y as usize;
-                let words_per_row = (width + 31) / 32;
-                let bytes_per_row = 4 * words_per_row;
-                for y in 0..height {
-                    let start = offset + bytes_per_row * y;
-                    let end = start + bytes_per_row;
-                    let row = &self.bytes[start..end];
-                    for x in 0..width {
-                        let idx = x / 8;
-                        let byte = row[idx];
-                        let mask = 128 >> (x % 8);
-                        let masked = byte & mask;
-                        let on = masked != 0;
+        for (code_point, glyph) in glyphs.iter_mut() {
+            let offset = self.metadata.first_bitmap_offset + bitmap_offsets[code_point];
+            let width = glyph.bounding_box.size.x as usize;
+            let height = glyph.bounding_box.size.y as usize;
+            let words_per_row = (width + 31) / 32;
+            let bytes_per_row = 4 * words_per_row;
+            for y in 0..height {
+                let start = offset + bytes_per_row * y;
+                let end = start + bytes_per_row;
+                let row = &self.bytes[start..end];
+                for x in 0..width {
+                    let idx = x / 8;
+                    let byte = row[idx];
+                    let mask = 128 >> (x % 8);
+                    let masked = byte & mask;
+                    let on = masked != 0;
 
-                        if on {
-                            glyph.bitmap[(y * width + x)] = 1;
-                        }
+                    if on {
+                        glyph.bitmap[(y * width + x)] = 1;
                     }
                 }
-            } else {
-                continue;
             }
         }
 
@@ -806,23 +766,28 @@ mod tests {
     fn it_loads_indices_for_uppercase_a() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
         let pcf = PcfFont::new(&font[..]);
-        let indices = HashMap::from([(&UPPERCASE_A, Some(35))]);
-        assert_eq!(indices, pcf.load_glyph_indices(&[&UPPERCASE_A]));
+        assert_eq!(35, pcf.load_glyph_indices()[&UPPERCASE_A]);
     }
 
     #[test]
     fn it_loads_indices_for_uppercase_j() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
         let pcf = PcfFont::new(&font[..]);
-        let indices = HashMap::from([(&UPPERCASE_J, Some(44))]);
-        assert_eq!(indices, pcf.load_glyph_indices(&[&UPPERCASE_J]));
+        assert_eq!(44, pcf.load_glyph_indices()[&UPPERCASE_J]);
+    }
+
+    #[test]
+    fn it_loads_indices_for_uppercase_w() {
+        let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
+        let pcf = PcfFont::new(&font[..]);
+        assert_eq!(57, pcf.load_glyph_indices()[&UPPERCASE_W]);
     }
 
     #[test]
     fn it_loads_all_metrics_for_uppercase_a() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
         let pcf = PcfFont::new(&font[..]);
-        let code_point_to_index = pcf.load_glyph_indices(&[&UPPERCASE_A]);
+        let indices = pcf.load_glyph_indices();
         let compressed_metrics = CompressedMetrics {
             left_side_bearing: 0,
             right_side_bearing: 7,
@@ -833,8 +798,8 @@ mod tests {
         };
 
         assert_eq!(
-            HashMap::from([(&UPPERCASE_A, Some(compressed_metrics))]),
-            pcf.load_all_metrics(&[&UPPERCASE_A], &code_point_to_index)
+            compressed_metrics,
+            pcf.load_all_metrics(&indices)[&UPPERCASE_A]
         );
     }
 
@@ -842,7 +807,7 @@ mod tests {
     fn it_loads_all_metrics_for_uppercase_j() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
         let pcf = PcfFont::new(&font[..]);
-        let code_point_to_index = pcf.load_glyph_indices(&[&UPPERCASE_J]);
+        let indices = pcf.load_glyph_indices();
         let compressed_metrics = CompressedMetrics {
             left_side_bearing: -1,
             right_side_bearing: 2,
@@ -853,8 +818,8 @@ mod tests {
         };
 
         assert_eq!(
-            HashMap::from([(&UPPERCASE_J, Some(compressed_metrics))]),
-            pcf.load_all_metrics(&[&UPPERCASE_J], &code_point_to_index)
+            compressed_metrics,
+            pcf.load_all_metrics(&indices)[&UPPERCASE_J]
         );
     }
 
@@ -862,7 +827,7 @@ mod tests {
     fn it_loads_all_metrics_for_uppercase_w() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
         let pcf = PcfFont::new(&font[..]);
-        let code_point_to_index = pcf.load_glyph_indices(&[&UPPERCASE_W]);
+        let indices = pcf.load_glyph_indices();
         let compressed_metrics = CompressedMetrics {
             left_side_bearing: 0,
             right_side_bearing: 11,
@@ -873,8 +838,8 @@ mod tests {
         };
 
         assert_eq!(
-            HashMap::from([(&UPPERCASE_W, Some(compressed_metrics))]),
-            pcf.load_all_metrics(&[&UPPERCASE_W], &code_point_to_index)
+            compressed_metrics,
+            pcf.load_all_metrics(&indices)[&UPPERCASE_W]
         );
     }
 
@@ -882,43 +847,33 @@ mod tests {
     fn it_loads_bitmap_offsets_for_uppercase_a() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
         let pcf = PcfFont::new(&font[..]);
-        let indices = pcf.load_glyph_indices(&[&UPPERCASE_A]);
+        let indices = pcf.load_glyph_indices();
 
-        assert_eq!(
-            HashMap::from([(&UPPERCASE_A, Some(960))]),
-            pcf.load_bitmap_offsets(&[&UPPERCASE_A], &indices)
-        );
+        assert_eq!(960, pcf.load_bitmap_offsets(&indices)[&UPPERCASE_A]);
     }
 
     #[test]
     fn it_loads_bitmap_offsets_for_uppercase_j() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
         let pcf = PcfFont::new(&font[..]);
-        let indices = pcf.load_glyph_indices(&[&UPPERCASE_J]);
+        let indices = pcf.load_glyph_indices();
 
-        assert_eq!(
-            HashMap::from([(&UPPERCASE_J, Some(1284))]),
-            pcf.load_bitmap_offsets(&[&UPPERCASE_J], &indices)
-        );
+        assert_eq!(1284, pcf.load_bitmap_offsets(&indices)[&UPPERCASE_J]);
     }
 
     #[test]
     fn it_loads_bitmap_offsets_for_uppercase_w() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
         let pcf = PcfFont::new(&font[..]);
-        let indices = pcf.load_glyph_indices(&[&UPPERCASE_W]);
+        let indices = pcf.load_glyph_indices();
 
-        assert_eq!(
-            HashMap::from([(&UPPERCASE_W, Some(1768))]),
-            pcf.load_bitmap_offsets(&[&UPPERCASE_W], &indices)
-        );
+        assert_eq!(1768, pcf.load_bitmap_offsets(&indices)[&UPPERCASE_W]);
     }
 
     #[test]
     fn it_has_an_uppercase_a() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
-        let mut pcf = PcfFont::new(&font[..]);
-        pcf.load_glyphs(&[UPPERCASE_A]);
+        let pcf = PcfFont::new(&font[..]);
         #[rustfmt::skip]
         let expected = Glyph {
             code_point: UPPERCASE_A,
@@ -949,8 +904,7 @@ mod tests {
     #[test]
     fn it_has_an_uppercase_j() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
-        let mut pcf = PcfFont::new(&font[..]);
-        pcf.load_glyphs(&[UPPERCASE_J]);
+        let pcf = PcfFont::new(&font[..]);
         #[rustfmt::skip]
         let expected = Glyph {
             code_point: UPPERCASE_J,
@@ -983,8 +937,7 @@ mod tests {
     #[test]
     fn it_has_an_uppercase_w() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
-        let mut pcf = PcfFont::new(&font[..]);
-        pcf.load_glyphs(&[UPPERCASE_W]);
+        let pcf = PcfFont::new(&font[..]);
         #[rustfmt::skip]
         let expected = Glyph {
             code_point: UPPERCASE_W,
