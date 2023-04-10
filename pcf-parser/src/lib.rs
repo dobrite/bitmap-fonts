@@ -569,9 +569,12 @@ impl PcfFont<'_> {
                 let words_per_row = (width + 31) / 32;
                 let bytes_per_row = 4 * words_per_row;
                 for y in 0..height {
+                    let start = offset + bytes_per_row * y;
+                    let end = start + bytes_per_row;
+                    let row = &self.bytes[start..end];
                     for x in 0..width {
-                        let idx = (bytes_per_row * y) + offset;
-                        let byte = self.bytes[idx];
+                        let idx = x / 8;
+                        let byte = row[idx];
                         let mask = 128 >> (x % 8);
                         let masked = byte & mask;
                         let on = masked != 0;
@@ -596,6 +599,7 @@ mod tests {
 
     const UPPERCASE_A: i32 = 65;
     const UPPERCASE_J: i32 = 74;
+    const UPPERCASE_W: i32 = 87;
 
     #[test]
     fn it_parses_header() {
@@ -850,6 +854,26 @@ mod tests {
     }
 
     #[test]
+    fn it_loads_all_metrics_for_uppercase_w() {
+        let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
+        let pcf = PcfFont::new(&font[..]);
+        let code_point_to_index = pcf.load_glyph_indices(&[&UPPERCASE_W]);
+        let compressed_metrics = CompressedMetrics {
+            left_side_bearing: 0,
+            right_side_bearing: 11,
+            character_width: 11,
+            character_ascent: 9,
+            character_descent: 0,
+            character_attributes: 0,
+        };
+
+        assert_eq!(
+            HashMap::from([(&UPPERCASE_W, Some(compressed_metrics))]),
+            pcf.load_all_metrics(&[&UPPERCASE_W], &code_point_to_index)
+        );
+    }
+
+    #[test]
     fn it_loads_bitmap_offsets_for_uppercase_a() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
         let pcf = PcfFont::new(&font[..]);
@@ -861,14 +885,30 @@ mod tests {
         );
     }
 
-    // from python
-    // 000000001
-    // 000001110
-    // 001111000
-    // 110001000
-    // 011001000
-    // 000111000
-    // 000000111
+    #[test]
+    fn it_loads_bitmap_offsets_for_uppercase_j() {
+        let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
+        let pcf = PcfFont::new(&font[..]);
+        let indices = pcf.load_glyph_indices(&[&UPPERCASE_J]);
+
+        assert_eq!(
+            HashMap::from([(&UPPERCASE_J, Some(1284))]),
+            pcf.load_bitmap_offsets(&[&UPPERCASE_J], &indices)
+        );
+    }
+
+    #[test]
+    fn it_loads_bitmap_offsets_for_uppercase_w() {
+        let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
+        let pcf = PcfFont::new(&font[..]);
+        let indices = pcf.load_glyph_indices(&[&UPPERCASE_W]);
+
+        assert_eq!(
+            HashMap::from([(&UPPERCASE_W, Some(1768))]),
+            pcf.load_bitmap_offsets(&[&UPPERCASE_W], &indices)
+        );
+    }
+
     #[test]
     fn it_has_an_uppercase_a() {
         let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
@@ -932,6 +972,38 @@ mod tests {
             tile_index: 0,
         };
         let glyph = &pcf.glyphs[&UPPERCASE_J];
+        assert_eq!(expected, *glyph);
+    }
+
+    #[test]
+    fn it_has_an_uppercase_w() {
+        let font = include_bytes!("../../assets/OpenSans-Regular-12.pcf");
+        let mut pcf = PcfFont::new(&font[..]);
+        pcf.load_glyphs(&[UPPERCASE_W]);
+        #[rustfmt::skip]
+        let expected = Glyph {
+            code_point: UPPERCASE_W,
+            encoding: Some('W'),
+            bitmap: vec![
+                1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
+                0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1,
+                0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0,
+                0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0,
+                0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0,
+                0, 0, 1, 1, 0, 0, 0, 1, 0, 1, 0,
+                0, 0, 1, 1, 0, 0, 0, 1, 1, 0, 0,
+                0, 0, 1, 1, 0, 0, 0, 1, 1, 0, 0,
+                0, 0, 1, 1, 0, 0, 0, 1, 1, 0, 0,
+            ],
+            bounding_box: BoundingBox {
+                size: Coord { x: 11, y: 9 },
+                offset: Coord { x: 0, y: 0 }
+            },
+            shift_x: 11,
+            shift_y: 0,
+            tile_index: 0,
+        };
+        let glyph = &pcf.glyphs[&UPPERCASE_W];
         assert_eq!(expected, *glyph);
     }
 }
