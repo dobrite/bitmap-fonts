@@ -505,13 +505,14 @@ impl PcfFont<'_> {
 
         for code_point in code_points {
             if let Some(metrics) = all_metrics[code_point] {
-                let width: u8 = (metrics.right_side_bearing - metrics.left_side_bearing)
+                let width: i32 = (metrics.right_side_bearing - metrics.left_side_bearing)
                     .try_into()
                     .unwrap();
-                let height: u8 = (metrics.character_ascent + metrics.character_descent)
+                let height: i32 = (metrics.character_ascent + metrics.character_descent)
                     .try_into()
                     .unwrap();
-                let bitmap = vec![0u8; (width * height).into()];
+                let len = (width * height).try_into().expect("width * height failed");
+                let bitmap = vec![0u8; len];
                 let encoding = u32::try_from(**code_point)
                     .ok()
                     .and_then(std::char::from_u32);
@@ -521,7 +522,7 @@ impl PcfFont<'_> {
                     code_point: **code_point,
                     encoding,
                     bounding_box: BoundingBox {
-                        size: Coord::new(width.into(), height.into()),
+                        size: Coord::new(width, height),
                         offset: Coord::new(
                             metrics.left_side_bearing as i32,
                             -(metrics.character_descent as i32),
