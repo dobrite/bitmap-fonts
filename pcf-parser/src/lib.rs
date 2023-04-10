@@ -1,6 +1,9 @@
 #![allow(dead_code)]
-use byteorder::{BigEndian, ByteOrder, LittleEndian};
-use std::collections::HashMap;
+use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
+use std::{
+    collections::HashMap,
+    io::{Cursor, Seek, SeekFrom},
+};
 
 // From https://fontforge.org/docs/techref/pcf-format.html
 // type field
@@ -111,7 +114,7 @@ type Tables = HashMap<usize, Table>;
 pub struct PcfFont<'a> {
     pub glyphs: HashMap<i32, Glyph>,
     tables: Tables,
-    bytes: &'a [u8],
+    bytes: Cursor<&'a [u8]>,
     accelerators: Accelerators,
     encoding: Encoding,
     bitmap: Bitmap,
@@ -151,10 +154,11 @@ impl Glyph {
 impl PcfFont<'_> {
     pub fn new(font: &[u8]) -> PcfFont {
         let mut pcf = PcfFont {
-            bytes: font,
+            bytes: Cursor::new(font),
             ..Default::default()
         };
 
+        pcf.header(); // TODO maybe panic if magic string is not there?
         pcf.tables = pcf.read_tables();
         pcf.accelerators = pcf.read_accelerators();
         pcf.encoding = pcf.read_encoding();
@@ -170,11 +174,12 @@ impl PcfFont<'_> {
     // 1, 102, 99, 112
     // 1885562369 lsbi32
     fn header(&self) -> i32 {
-        LittleEndian::read_i32(&self.bytes[0..4])
+        self.bytes.read_i32::<LittleEndian>().unwrap()
     }
 
     fn table_count(&self) -> i32 {
-        LittleEndian::read_i32(&self.bytes[4..8])
+        // test assumes header was called
+        self.bytes.read_i32::<LittleEndian>().unwrap()
     }
 
     fn tables(&self) -> &Tables {
@@ -182,29 +187,34 @@ impl PcfFont<'_> {
     }
 
     fn read_tables(&self) -> HashMap<usize, Table> {
-        (0..self.table_count())
-            .fold((8, HashMap::new()), |(mut cursor, mut tables), _| {
-                let r#type = LittleEndian::read_i32(&self.bytes[cursor..cursor + 4])
-                    .try_into()
-                    .expect("unable to convert type i32 into usize");
-                let format = LittleEndian::read_i32(&self.bytes[cursor + 4..cursor + 8]);
-                let size = LittleEndian::read_i32(&self.bytes[cursor + 8..cursor + 12]);
-                let offset = LittleEndian::read_i32(&self.bytes[cursor + 12..cursor + 16])
-                    .try_into()
-                    .expect("unable to convert offset i32 into usize");
+        // assumes header was called (since table_count assumes that)
+        // TODO: this can be a map I think now.
+        (0..self.table_count()).fold(HashMap::new(), |mut tables, _| {
+            let r#type = self
+                .bytes
+                .read_i32::<LittleEndian>()
+                .unwrap()
+                .try_into()
+                .expect("unable to convert type i32 into usize");
+            let format = self.bytes.read_i32::<LittleEndian>().unwrap();
+            let size = self.bytes.read_i32::<LittleEndian>().unwrap();
+            let offset = self
+                .bytes
+                .read_i32::<LittleEndian>()
+                .unwrap()
+                .try_into()
+                .expect("unable to convert offset i32 into usize");
 
-                let table = Table {
-                    format,
-                    size,
-                    offset,
-                };
+            let table = Table {
+                format,
+                size,
+                offset,
+            };
 
-                tables.insert(r#type, table);
-                cursor += 16;
+            tables.insert(r#type, table);
 
-                (cursor, tables)
-            })
-            .1
+            tables
+        })
     }
 
     fn read_accelerators(&self) -> Accelerators {
