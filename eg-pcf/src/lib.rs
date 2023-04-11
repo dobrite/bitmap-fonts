@@ -60,13 +60,13 @@ impl PcfGlyph {
     }
 }
 
-//#[cfg(test)]
-//mod tests {
-//    use super::*;
-//
-//    #[test]
-//    fn it_works() {
-//        let font = include_pcf!("examples/OpenSans-Regular-12.pcf");
-//        assert!(true == false);
-//    }
-//}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_works() {
+        let font = include_pcf!("examples/OpenSans-Regular-12.pcf", 'A'..='B');
+        assert!(font.line_height == 12);
+    }
+}

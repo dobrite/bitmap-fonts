@@ -1,4 +1,4 @@
-use eg_pcf::{include_pcf, text::PcfTextStyle, PcfFont};
+use eg_pcf::{include_pcf, text::PcfTextStyle, PcfFont, PcfGlyph};
 use embedded_graphics::{
     pixelcolor::Rgb888,
     prelude::*,

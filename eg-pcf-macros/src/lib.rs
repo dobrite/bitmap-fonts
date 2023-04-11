@@ -2,13 +2,14 @@ use embedded_graphics::{prelude::*, primitives::Rectangle};
 use pcf_parser::{BoundingBox, Glyph, PcfFont};
 use proc_macro::TokenStream;
 use proc_macro2::Span;
+use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
 use std::{fs, path::PathBuf};
 use syn::{
     parse::{Parse, ParseStream},
     parse_macro_input,
     punctuated::Punctuated,
-    LitChar, LitStr, Result, Token,
+    Ident, LitChar, LitStr, Result, Token,
 };
 
 struct IncludePcf {
@@ -139,10 +140,19 @@ fn glyph_literal(glyph: &Glyph, start_index: usize) -> (Vec<bool>, proc_macro2::
         }
     }
 
+    let found_crate = crate_name("eg-pcf").expect("eg-pcf is present in `Cargo.toml`");
+    let pcf_glyph = match found_crate {
+        FoundCrate::Itself => quote!(crate::PcfGlyph),
+        FoundCrate::Name(name) => {
+            let ident = Ident::new(&name, Span::call_site());
+            quote!(#ident::PcfGlyph)
+        }
+    };
+
     (
         data,
         quote! {
-            ::eg_pcf::PcfGlyph {
+            #pcf_glyph {
                 character: #character,
                 bounding_box: #bounding_box,
                 device_width: #device_width,
@@ -193,9 +203,17 @@ pub fn include_pcf(input: TokenStream) -> TokenStream {
     let data = bits_to_bytes(&data);
     // TODO: report error or calculate fallback value
     let line_height = font.bounding_box.size.y as u32;
+    let found_crate = crate_name("eg-pcf").expect("eg-pcf is present in `Cargo.toml`");
+    let pcf_font = match found_crate {
+        FoundCrate::Itself => quote!(crate::PcfFont),
+        FoundCrate::Name(name) => {
+            let ident = Ident::new(&name, Span::call_site());
+            quote!(#ident::PcfFont)
+        }
+    };
 
     let output = quote! {
-        ::eg_pcf::PcfFont {
+        #pcf_font {
             glyphs: &[ #( #glyphs ),* ],
             data: &[ #( #data ),* ],
             line_height: #line_height,
