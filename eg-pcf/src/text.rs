@@ -76,15 +76,18 @@ impl<C: PixelColor> TextRenderer for PcfTextStyle<'_, C> {
     }
 
     fn measure_string(&self, text: &str, position: Point, _baseline: Baseline) -> TextMetrics {
+        let glyphs = text.chars().map(|c| self.font.get_glyph(c));
         // TODO: handle baseline
-        let dx = text
-            .chars()
-            .map(|c| self.font.get_glyph(c).device_width)
-            .sum();
+        let dx = glyphs.clone().map(|g| g.device_width).sum();
 
-        // TODO: calculate bounding box
+        let height = glyphs
+            .map(|g| g.bounding_box.size.height)
+            .max()
+            .unwrap_or(0);
+
+        // TODO: validate bounding box
         TextMetrics {
-            bounding_box: Rectangle::new(position, Size::zero()),
+            bounding_box: Rectangle::new(position, Size::new(dx, height)),
             next_position: position + Size::new(dx, 0),
         }
     }
