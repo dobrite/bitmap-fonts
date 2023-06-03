@@ -13,6 +13,7 @@ pub mod text;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PcfFont<'a> {
+    pub bounding_box: Rectangle,
     pub replacement_character: usize,
     pub line_height: u32,
     pub glyphs: &'a [PcfGlyph],

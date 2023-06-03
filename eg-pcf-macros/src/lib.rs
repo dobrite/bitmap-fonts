@@ -198,6 +198,8 @@ pub fn include_pcf(input: TokenStream) -> TokenStream {
         }
     }
 
+    let rectangle = bounding_box_to_rectangle(&font.bounding_box);
+    let bounding_box = rectangle_constructor(&rectangle);
     // TODO: try to use DEFAULT_CHAR
     let replacement_character = replacement_character.unwrap_or_default();
     let data = bits_to_bytes(&data);
@@ -214,6 +216,7 @@ pub fn include_pcf(input: TokenStream) -> TokenStream {
 
     let output = quote! {
         #pcf_font {
+            bounding_box: #bounding_box,
             glyphs: &[ #( #glyphs ),* ],
             data: &[ #( #data ),* ],
             line_height: #line_height,
